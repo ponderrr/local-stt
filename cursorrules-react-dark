@@ -1,0 +1,254 @@
+# React + shadcn/ui Dark Design System
+
+## Design Philosophy
+> "Darkness is the design, color is the exception."
+
+Rich charcoal with depth layers — NOT flat pure black. Premium minimalism with near-invisible structure. Color accent limited to ~5% of the UI surface area.
+
+## Color Palette
+
+### Core Tokens (CSS Variables)
+```css
+:root {
+  /* Page background — rich charcoal, NOT pure black */
+  --background: 240 6% 6%;           /* #0f0f11 */
+  --foreground: 0 0% 98%;            /* #fafafa */
+
+  /* Cards — slightly elevated from background */
+  --card: 240 5% 8%;                 /* #131316 */
+  --card-foreground: 0 0% 98%;
+
+  /* Popover/Dropdown */
+  --popover: 240 5% 10%;             /* #18181b */
+  --popover-foreground: 0 0% 98%;
+
+  /* Primary accent — ONLY color in the UI */
+  --primary: 210 100% 50%;           /* Project-specific, keep interchangeable */
+  --primary-foreground: 0 0% 98%;
+
+  /* Secondary */
+  --secondary: 240 4% 16%;           /* #27272a */
+  --secondary-foreground: 0 0% 98%;
+
+  /* Muted */
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 55%;    /* #8b8b94 */
+
+  /* Borders — near invisible */
+  --border: 240 4% 14%;              /* rgba(255,255,255,0.08) equivalent */
+  --input: 240 4% 14%;
+  --ring: var(--primary);
+
+  /* Destructive */
+  --destructive: 0 72% 51%;          /* #dc2626 */
+  --destructive-foreground: 0 0% 98%;
+
+  /* Radius */
+  --radius: 0.5rem;
+}
+```
+
+### Hex Quick Reference
+| Usage | Hex | Description |
+|-------|-----|-------------|
+| Page bg | `#0f0f11` | Rich charcoal |
+| Card bg | `#131316` | Slightly elevated |
+| Popover | `#18181b` | Dropdown/modal bg |
+| Border | `rgba(255,255,255,0.08)` | Near-invisible |
+| Text primary | `#fafafa` | High contrast white |
+| Text muted | `#8b8b94` | Subdued secondary |
+| Text dim | `#52525b` | Hints, timestamps |
+
+## Hard Rules
+
+### DO
+- ✅ Rich charcoal backgrounds with subtle depth layers
+- ✅ Near-invisible borders (white at 8-10% opacity)
+- ✅ Center all content — titles, values, labels
+- ✅ Uppercase, small, muted section/widget titles
+- ✅ Large prominent values/data
+- ✅ Generous spacing (think breathing room)
+- ✅ Subtle hover states (`bg-white/5` or `bg-white/[0.03]`)
+- ✅ Smooth transitions on all interactive elements
+- ✅ Status colors used semantically only (green=active, red=error, amber=loading)
+
+### DON'T
+- ❌ Pure black (`#000000`) anywhere
+- ❌ Glassmorphism / backdrop-blur
+- ❌ Glow effects / colored shadows / box-shadow with color
+- ❌ Gradients (unless extremely subtle, background-only)
+- ❌ Heavy borders or divider lines
+- ❌ Color splashes beyond the 5% accent budget
+- ❌ Bright/saturated colors outside of status indicators
+- ❌ Default shadcn/ui zinc theme without customization
+
+## Component Patterns
+
+### Card
+```tsx
+<div className="bg-[#131316] border border-white/[0.08] rounded-lg p-6">
+  <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center mb-4">
+    Widget Title
+  </h3>
+  <div className="text-center">
+    {/* Content */}
+  </div>
+</div>
+```
+
+### Status Indicator
+```tsx
+// Semantic colors only — green/red/amber for meaning, not decoration
+const statusColors = {
+  listening: "bg-emerald-500",   // Active/recording
+  idle: "bg-zinc-600",           // Inactive
+  loading: "bg-amber-500",      // Processing/loading
+  error: "bg-red-500",          // Error state
+} as const;
+
+<div className="flex items-center gap-2">
+  <div className={`w-2 h-2 rounded-full ${statusColors[status]} ${status === 'listening' ? 'animate-pulse' : ''}`} />
+  <span className="text-sm text-muted-foreground uppercase tracking-wide">
+    {status}
+  </span>
+</div>
+```
+
+### Button (Primary)
+```tsx
+<button className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition-colors">
+  Action
+</button>
+```
+
+### Button (Ghost/Secondary)
+```tsx
+<button className="hover:bg-white/[0.05] text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm transition-colors">
+  Secondary
+</button>
+```
+
+### Dropdown/Select
+```tsx
+<select className="bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary focus:border-primary outline-none">
+  <option>Option</option>
+</select>
+```
+
+### Progress Bar
+```tsx
+<div className="w-full h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
+  <div
+    className="h-full bg-primary rounded-full transition-all duration-300"
+    style={{ width: `${percent}%` }}
+  />
+</div>
+```
+
+### Scrollable Text Area (Transcript)
+```tsx
+<div className="bg-[#0a0a0c] border border-white/[0.06] rounded-lg p-4 h-64 overflow-y-auto font-mono text-sm text-foreground/90 leading-relaxed">
+  {transcript}
+</div>
+```
+
+## Layout Principles
+
+### Window Layout
+```
+┌─────────────────────────────────────────┐
+│  Window chrome (Tauri titlebar)         │
+├─────────────────────────────────────────┤
+│                                         │
+│     p-6 outer padding                   │
+│                                         │
+│     ┌─────────────────────────────┐     │
+│     │  Content centered, max-w    │     │
+│     │  gap-4 between sections     │     │
+│     └─────────────────────────────┘     │
+│                                         │
+│     Generous vertical spacing           │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### Spacing Scale
+- Between major sections: `gap-6` or `space-y-6`
+- Between related items: `gap-3` or `space-y-3`
+- Inner padding on cards: `p-5` or `p-6`
+- Window padding: `p-6`
+
+## Typography
+- **Titles/Labels:** `text-xs font-medium uppercase tracking-wider text-muted-foreground`
+- **Values/Data:** `text-2xl font-semibold text-foreground` (make data prominent)
+- **Body text:** `text-sm text-foreground/90`
+- **Hints:** `text-xs text-zinc-500`
+- **Monospace (transcript):** `font-mono text-sm`
+
+## Animations
+```css
+/* Pulse for active recording indicator */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Use Tailwind's built-in */
+.animate-pulse { /* for status dots */ }
+
+/* Smooth transitions on everything interactive */
+transition-colors duration-150
+transition-all duration-200
+```
+
+## Tailwind Config Extensions
+```ts
+// tailwind.config.ts
+export default {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        card: "hsl(var(--card))",
+        primary: "hsl(var(--primary))",
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+      },
+      borderColor: {
+        DEFAULT: "rgba(255, 255, 255, 0.08)",
+      },
+    },
+  },
+}
+```
+
+## Anti-Patterns to Reject
+```tsx
+// ❌ REJECT: Pure black backgrounds
+<div className="bg-black">
+
+// ❌ REJECT: Glassmorphism
+<div className="backdrop-blur-xl bg-white/10">
+
+// ❌ REJECT: Glow effects
+<div className="shadow-lg shadow-blue-500/20">
+
+// ❌ REJECT: Gradient backgrounds
+<div className="bg-gradient-to-r from-blue-500 to-purple-500">
+
+// ❌ REJECT: Heavy borders
+<div className="border-2 border-zinc-500">
+
+// ❌ REJECT: Left-aligned titles (center everything)
+<h2 className="text-left">Title</h2>
+
+// ✅ CORRECT: Rich charcoal + near-invisible border
+<div className="bg-[#131316] border border-white/[0.08] rounded-lg">
+
+// ✅ CORRECT: Centered muted title
+<h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-center">
+```

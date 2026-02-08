@@ -1,0 +1,176 @@
+# WhisperType (local-stt) — Project Rules
+
+## Project Overview
+**WhisperType** is a local AI-powered dictation desktop app built with Tauri (Rust backend) + React (TypeScript frontend). It uses whisper-rs (Rust bindings to whisper.cpp) for GPU-accelerated speech-to-text transcription. Zero Python dependencies — pure Rust + React.
+
+## Target Hardware
+- **GPU:** NVIDIA RTX 5060 Ti (16GB VRAM)
+- **CPU:** AMD Ryzen 7 9700X (8-core/16-thread)
+- **RAM:** 32GB
+- **Storage:** 1TB NVMe Kingston
+- **OS:** CachyOS Linux (Arch-based)
+- **NVIDIA Driver:** 590.48
+- **CUDA:** Required for GPU-accelerated transcription
+
+## Tech Stack
+### Backend (Rust / Tauri)
+| Crate | Purpose |
+|-------|---------|
+| `tauri` | App framework, window management, IPC |
+| `whisper-rs` | Rust bindings to whisper.cpp (CUDA-accelerated) |
+| `cpal` | Cross-platform audio capture |
+| `global-hotkeys` or `tauri-plugin-global-shortcut` | System-wide hotkey |
+| `enigo` | Simulate keyboard input into active field |
+| `arboard` | Clipboard read/write |
+| `reqwest` | Model downloads from HuggingFace |
+| `serde` / `serde_json` | Config serialization |
+| `tokio` | Async runtime |
+| `hound` | WAV audio buffer handling |
+
+### Frontend (Tauri WebView)
+| Tech | Purpose |
+|------|---------|
+| React 18 | UI framework |
+| TypeScript | Type safety |
+| Tailwind CSS | Utility-first styling |
+| shadcn/ui | Component library (dark theme) |
+| @tauri-apps/api | Rust ↔ Frontend IPC |
+
+## Architecture Rules
+
+### Rust Backend
+1. **Async-first** — Use `tokio` for all I/O operations
+2. **Thread isolation** — Audio capture on dedicated thread, transcription on another, never block the main thread
+3. **Error propagation** — Use `Result<T, String>` for all Tauri commands, never `unwrap()` in production paths
+4. **State management** — Use `tauri::State<Mutex<T>>` for shared mutable state
+5. **IPC pattern** — Commands for request/response, Events for streaming data (transcription updates, download progress)
+
+### Frontend
+1. **Component structure** — Atomic design: atoms → molecules → organisms → pages
+2. **State** — React hooks + Tauri event listeners, no external state library needed
+3. **Styling** — Tailwind utilities only, follow design system strictly
+4. **IPC calls** — Always wrap `invoke()` in try/catch, show error states
+5. **Loading states** — Every async action must have a loading indicator
+
+## File Structure
+```
+local-stt/
+├── .cursorrules                    # This file
+├── .cursorrules-rust-tauri         # Rust/Tauri best practices
+├── .cursorrules-react-dark         # React/shadcn dark design system
+├── ARCHITECTURE.md                 # Phase 1 architectural proposal
+├── PHASES.md                       # All micro-phases
+├── backend/
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   ├── src/
+│   │   ├── main.rs                 # Tauri entry point
+│   │   ├── lib.rs                  # Module declarations
+│   │   ├── audio/
+│   │   │   ├── mod.rs
+│   │   │   ├── capture.rs          # Mic capture with cpal
+│   │   │   ├── vad.rs              # Voice activity detection
+│   │   │   └── buffer.rs           # Ring buffer for audio chunks
+│   │   ├── transcription/
+│   │   │   ├── mod.rs
+│   │   │   ├── engine.rs           # whisper-rs integration
+│   │   │   └── models.rs           # Model registry + metadata
+│   │   ├── output/
+│   │   │   ├── mod.rs
+│   │   │   ├── keyboard.rs         # enigo keystroke simulation
+│   │   │   └── clipboard.rs        # arboard clipboard
+│   │   ├── hotkey/
+│   │   │   ├── mod.rs
+│   │   │   └── manager.rs          # Global hotkey registration
+│   │   ├── model_manager/
+│   │   │   ├── mod.rs
+│   │   │   ├── download.rs         # HuggingFace model downloads
+│   │   │   └── storage.rs          # Model file management
+│   │   ├── config/
+│   │   │   ├── mod.rs
+│   │   │   └── settings.rs         # App config load/save
+│   │   └── commands/
+│   │       ├── mod.rs
+│   │       ├── dictation.rs        # start/stop/toggle commands
+│   │       ├── models.rs           # model management commands
+│   │       ├── config.rs           # config commands
+│   │       └── system.rs           # GPU info, audio devices
+│   └── icons/
+├── frontend/
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── index.css                   # Tailwind + design tokens
+│   ├── lib/
+│   │   ├── tauri.ts                # Typed IPC wrappers
+│   │   └── utils.ts                # cn() helper, etc.
+│   ├── hooks/
+│   │   ├── use-dictation.ts        # Dictation state + controls
+│   │   ├── use-models.ts           # Model list + management
+│   │   ├── use-config.ts           # App config
+│   │   └── use-transcription.ts    # Live transcription stream
+│   ├── components/
+│   │   ├── ui/                     # shadcn/ui components
+│   │   ├── transcript-display.tsx
+│   │   ├── model-selector.tsx
+│   │   ├── status-indicator.tsx
+│   │   ├── settings-panel.tsx
+│   │   └── setup-wizard/
+│   │       ├── index.tsx
+│   │       ├── step-gpu.tsx
+│   │       ├── step-models.tsx
+│   │       ├── step-download.tsx
+│   │       ├── step-hotkey.tsx
+│   │       └── step-complete.tsx
+│   └── pages/
+│       ├── main-window.tsx
+│       └── setup.tsx
+├── package.json
+├── tsconfig.json
+├── tailwind.config.ts
+├── postcss.config.js
+└── index.html
+```
+
+## Commit Convention
+```
+type(scope): description
+
+feat(audio): implement mic capture with cpal
+feat(transcription): integrate whisper-rs with CUDA
+feat(ui): add model selector dropdown
+fix(hotkey): resolve conflict with system shortcuts
+refactor(config): extract settings into dedicated module
+chore(deps): update whisper-rs to latest
+docs(readme): add installation instructions
+```
+
+## Development Commands
+```bash
+# Development
+npm run tauri dev
+
+# Build
+npm run tauri build
+
+# Check Rust
+cd backend && cargo check
+
+# Check Frontend
+npm run type-check
+
+# Test Rust
+cd backend && cargo test
+
+# Lint
+cd backend && cargo clippy
+npm run lint
+```
+
+## Sacred Laws
+- **No placeholders** — Complete, production-ready code or nothing
+- **Exact file paths** — Zero ambiguity
+- **Bash verification** — Every phase has validation commands
+- **Acceptance checkboxes** — Clear completion criteria
+- **Sequential execution** — Phases build on each other
+- **Error handling everywhere** — No unwrap() in production, no unhandled promise rejections
+- **Type safety** — Strict TypeScript, no `any`

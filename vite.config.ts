@@ -10,7 +10,7 @@ export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./frontend/src"),
     },
   },
   clearScreen: false,
@@ -26,7 +26,7 @@ export default defineConfig(async () => ({
       }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/backend/**"],
     },
   },
 }));
