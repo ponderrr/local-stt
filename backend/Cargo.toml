@@ -6,7 +6,7 @@ authors = ["ponderrr <robert.ponder@selu.edu>"]
 edition = "2021"
 
 [lib]
-name = "whispertype_lib"
+name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
