@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TranscriptDisplay } from "@/components/transcript-display";
 import { ModelSelector } from "@/components/model-selector";
 import { StatusIndicator } from "@/components/status-indicator";
@@ -14,6 +14,18 @@ export function MainWindow() {
   const { transcript, clear } = useTranscription();
   const { models, activeModel, loadModel } = useModels();
   const { config } = useConfig();
+
+  useEffect(() => {
+    if (config && !activeModel) {
+      const defaultModel = config.default_model;
+      const isDownloaded = models.find(
+        (m) => m.id === defaultModel && m.downloaded
+      );
+      if (isDownloaded) {
+        loadModel(defaultModel);
+      }
+    }
+  }, [config, models, activeModel, loadModel]);
 
   return (
     <div className="h-screen flex flex-col bg-[#0f0f11] text-foreground p-6">
