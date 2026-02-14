@@ -1,12 +1,14 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-
-// Types
+/**
+ * Centralized Tauri IPC layer. All backend commands and event listeners are
+ * accessed through the `commands` and `events` exports below.
+ */
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 export interface Config {
   version: number;
   hotkey: string;
   default_model: string;
-  output_mode: "type_into_field" | "clipboard" | "both";
+  output_mode: 'type_into_field' | 'clipboard' | 'both';
   audio_device: string | null;
   language: string;
   vad_threshold: number;
@@ -45,26 +47,30 @@ export interface DownloadProgress {
 
 // Commands
 export const commands = {
-  toggleDictation: () => invoke<boolean>("toggle_dictation"),
-  startDictation: () => invoke<void>("start_dictation"),
-  stopDictation: () => invoke<void>("stop_dictation"),
-  listModels: () => invoke<ModelInfo[]>("list_models"),
-  downloadModel: (modelId: string) => invoke<void>("download_model", { modelId }),
-  deleteModel: (modelId: string) => invoke<void>("delete_model", { modelId }),
-  loadModel: (modelId: string) => invoke<void>("load_model", { modelId }),
-  getActiveModel: () => invoke<string | null>("get_active_model"),
-  getConfig: () => invoke<Config>("get_config"),
-  updateConfig: (config: Config) => invoke<void>("update_config", { config }),
-  listAudioDevices: () => invoke<string[]>("list_audio_devices"),
-  getGpuInfo: () => invoke<GpuInfo>("get_gpu_info"),
+  toggleDictation: () => invoke<boolean>('toggle_dictation'),
+  startDictation: () => invoke<void>('start_dictation'),
+  stopDictation: () => invoke<void>('stop_dictation'),
+  listModels: () => invoke<ModelInfo[]>('list_models'),
+  downloadModel: (modelId: string) => invoke<void>('download_model', { modelId }),
+  deleteModel: (modelId: string) => invoke<void>('delete_model', { modelId }),
+  loadModel: (modelId: string) => invoke<void>('load_model', { modelId }),
+  getActiveModel: () => invoke<string | null>('get_active_model'),
+  getConfig: () => invoke<Config>('get_config'),
+  updateConfig: (config: Config) => invoke<void>('update_config', { config }),
+  listAudioDevices: () => invoke<string[]>('list_audio_devices'),
+  getGpuInfo: () => invoke<GpuInfo>('get_gpu_info'),
 };
 
 // Event Listeners
 export const events = {
   onTranscription: (handler: (data: TranscriptionUpdate) => void): Promise<UnlistenFn> =>
-    listen<TranscriptionUpdate>("transcription-update", (event) => handler(event.payload)),
+    listen<TranscriptionUpdate>('transcription-update', (event) => handler(event.payload)),
   onDictationStatus: (handler: (status: string) => void): Promise<UnlistenFn> =>
-    listen<string>("dictation-status", (event) => handler(event.payload)),
+    listen<string>('dictation-status', (event) => handler(event.payload)),
   onDownloadProgress: (handler: (data: DownloadProgress) => void): Promise<UnlistenFn> =>
-    listen<DownloadProgress>("download-progress", (event) => handler(event.payload)),
+    listen<DownloadProgress>('download-progress', (event) => handler(event.payload)),
+  onOutputError: (handler: (message: string) => void): Promise<UnlistenFn> =>
+    listen<string>('output-error', (event) => handler(event.payload)),
+  onTranscriptionError: (handler: (message: string) => void): Promise<UnlistenFn> =>
+    listen<string>('transcription-error', (event) => handler(event.payload)),
 };

@@ -22,3 +22,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Operational artifacts
+PHASES*.md
+REVIEW*.md
+READINESS*.md
+EXECUTION-LOG.md
+MASTER-EXECUTION-ORDER.md
+*-REPORT.md
+prompt.txt
+
+# Agent config
+.claude/
+.cursorrules
+.cursorrules-*
+cursorrules*
+
+# Skills
+SKILL.md

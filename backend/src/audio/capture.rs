@@ -1,17 +1,28 @@
+//! Microphone capture via cpal. Pushes raw f32 samples into a lock-free ring buffer
+//! at the device's native sample rate and channel count.
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleRate, Stream, StreamConfig};
-use std::sync::mpsc;
+use cpal::{Stream, StreamConfig};
+use ringbuf::traits::Producer;
 
 pub struct AudioCapture {
     stream: Option<Stream>,
-    pub sample_rate: u32,
+    pub device_sample_rate: u32,
+    pub device_channels: u16,
+}
+
+impl Default for AudioCapture {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AudioCapture {
     pub fn new() -> Self {
         Self {
             stream: None,
-            sample_rate: 16000,
+            device_sample_rate: 48000,
+            device_channels: 1,
         }
     }
 
@@ -29,7 +40,7 @@ impl AudioCapture {
     pub fn start(
         &mut self,
         device_name: Option<&str>,
-        sender: mpsc::Sender<Vec<f32>>,
+        mut producer: ringbuf::HeapProd<f32>,
     ) -> Result<(), String> {
         let host = cpal::default_host();
 
@@ -44,17 +55,26 @@ impl AudioCapture {
                 .ok_or("No default input device found")?,
         };
 
-        let config = StreamConfig {
-            channels: 1,
-            sample_rate: SampleRate(self.sample_rate),
-            buffer_size: cpal::BufferSize::Default,
-        };
+        let supported_config = device
+            .default_input_config()
+            .map_err(|e| format!("Failed to get default input config: {}", e))?;
+
+        let sample_format = supported_config.sample_format();
+        eprintln!(
+            "[audio] Device config: rate={}Hz, channels={}, format={:?}",
+            supported_config.sample_rate().0,
+            supported_config.channels(),
+            sample_format
+        );
+        let config: StreamConfig = supported_config.into();
+        self.device_sample_rate = config.sample_rate.0;
+        self.device_channels = config.channels;
 
         let stream = device
             .build_input_stream(
                 &config,
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    sender.send(data.to_vec()).ok();
+                    producer.push_slice(data);
                 },
                 |err| eprintln!("[audio] Stream error: {}", err),
                 None,
@@ -67,13 +87,5 @@ impl AudioCapture {
 
         self.stream = Some(stream);
         Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        self.stream = None; // Drop the stream, which stops capture
-    }
-
-    pub fn is_active(&self) -> bool {
-        self.stream.is_some()
     }
 }
