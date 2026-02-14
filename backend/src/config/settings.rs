@@ -34,7 +34,7 @@ impl Default for Config {
             output_mode: OutputMode::Both,
             audio_device: None,
             language: "auto".to_string(),
-            vad_threshold: 0.3,
+            vad_threshold: 0.01,
             chunk_duration_ms: 3000,
             overlap_ms: 500,
             downloaded_models: Vec::new(),

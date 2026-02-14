@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri --project backend"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

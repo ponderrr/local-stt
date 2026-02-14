@@ -1,7 +1,6 @@
 pub mod audio;
 pub mod commands;
 pub mod config;
-pub mod hotkey;
 pub mod model_manager;
 pub mod output;
 pub mod transcription;

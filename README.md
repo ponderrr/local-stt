@@ -36,7 +36,11 @@ sudo pacman -S webkit2gtk-4.1 base-devel curl wget openssl \
 git clone https://github.com/ponderrr/local-stt.git
 cd local-stt
 npm install
-cargo tauri dev
+npm run dev
+
+# In a separate terminal:
+cd backend
+cargo run
 ```
 
 ### Production Build
