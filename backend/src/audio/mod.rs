@@ -11,6 +11,37 @@ use std::sync::{
 };
 use vad::VoiceActivityDetector;
 
+/// Convert interleaved multi-channel audio to mono by averaging channels.
+fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
+    if channels == 1 {
+        return samples.to_vec();
+    }
+    let ch = channels as usize;
+    samples
+        .chunks_exact(ch)
+        .map(|frame| frame.iter().sum::<f32>() / ch as f32)
+        .collect()
+}
+
+/// Resample audio from src_rate to dst_rate using linear interpolation.
+fn resample(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
+    if src_rate == dst_rate {
+        return input.to_vec();
+    }
+    let ratio = src_rate as f64 / dst_rate as f64;
+    let output_len = (input.len() as f64 / ratio) as usize;
+    let mut output = Vec::with_capacity(output_len);
+    for i in 0..output_len {
+        let src_pos = i as f64 * ratio;
+        let idx = src_pos as usize;
+        let frac = (src_pos - idx as f64) as f32;
+        let a = input[idx];
+        let b = input[(idx + 1).min(input.len() - 1)];
+        output.push(a * (1.0 - frac) + b * frac);
+    }
+    output
+}
+
 pub struct AudioPipeline {
     is_running: Arc<AtomicBool>,
 }
@@ -51,13 +82,18 @@ impl AudioPipeline {
             // Signal success
             init_tx.send(Ok(())).ok();
 
+            let device_rate = capture.device_sample_rate;
+            let device_channels = capture.device_channels;
+
             let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
             let mut vad = VoiceActivityDetector::new(vad_threshold);
 
             while running.load(Ordering::SeqCst) {
                 match audio_rx.recv_timeout(std::time::Duration::from_millis(100)) {
                     Ok(samples) => {
-                        buffer.write(&samples);
+                        let mono = to_mono(&samples, device_channels);
+                        let resampled = resample(&mono, device_rate, 16000);
+                        buffer.write(&resampled);
 
                         if buffer.has_chunk() {
                             if let Some(chunk) = buffer.extract_chunk() {
