@@ -80,7 +80,11 @@ mod tests {
     #[test]
     fn test_registry_has_five_models() {
         let registry = get_model_registry();
-        assert_eq!(registry.len(), 5, "registry should contain exactly 5 models");
+        assert_eq!(
+            registry.len(),
+            5,
+            "registry should contain exactly 5 models"
+        );
     }
 
     #[test]
@@ -98,15 +102,27 @@ mod tests {
         let mut filenames: Vec<&str> = registry.iter().map(|m| m.filename.as_str()).collect();
         filenames.sort();
         filenames.dedup();
-        assert_eq!(filenames.len(), registry.len(), "all filenames should be unique");
+        assert_eq!(
+            filenames.len(),
+            registry.len(),
+            "all filenames should be unique"
+        );
     }
 
     #[test]
     fn test_registry_all_models_have_valid_urls() {
         let registry = get_model_registry();
         for model in registry {
-            assert!(model.url.starts_with("https://"), "model {} URL should start with https://", model.id);
-            assert!(model.url.contains("huggingface.co"), "model {} URL should point to huggingface", model.id);
+            assert!(
+                model.url.starts_with("https://"),
+                "model {} URL should start with https://",
+                model.id
+            );
+            assert!(
+                model.url.contains("huggingface.co"),
+                "model {} URL should point to huggingface",
+                model.id
+            );
         }
     }
 
@@ -114,7 +130,11 @@ mod tests {
     fn test_registry_all_models_have_nonzero_size() {
         let registry = get_model_registry();
         for model in registry {
-            assert!(model.size_bytes > 0, "model {} should have nonzero size_bytes", model.id);
+            assert!(
+                model.size_bytes > 0,
+                "model {} should have nonzero size_bytes",
+                model.id
+            );
         }
     }
 
@@ -122,7 +142,11 @@ mod tests {
     fn test_registry_all_models_have_display_names() {
         let registry = get_model_registry();
         for model in registry {
-            assert!(!model.display_name.is_empty(), "model {} should have a display name", model.id);
+            assert!(
+                !model.display_name.is_empty(),
+                "model {} should have a display name",
+                model.id
+            );
         }
     }
 
@@ -130,7 +154,11 @@ mod tests {
     fn test_registry_all_filenames_end_with_bin() {
         let registry = get_model_registry();
         for model in registry {
-            assert!(model.filename.ends_with(".bin"), "model {} filename should end with .bin", model.id);
+            assert!(
+                model.filename.ends_with(".bin"),
+                "model {} filename should end with .bin",
+                model.id
+            );
         }
     }
 
@@ -141,7 +169,8 @@ mod tests {
         for id in &expected_ids {
             assert!(
                 registry.iter().any(|m| m.id == *id),
-                "registry should contain model with id '{}'", id
+                "registry should contain model with id '{}'",
+                id
             );
         }
     }
@@ -156,7 +185,9 @@ mod tests {
             assert!(
                 model.size_bytes > prev_size,
                 "model {} size ({}) should be greater than previous ({})",
-                id, model.size_bytes, prev_size
+                id,
+                model.size_bytes,
+                prev_size
             );
             prev_size = model.size_bytes;
         }

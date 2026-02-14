@@ -50,7 +50,11 @@ mod tests {
         // This test ensures all OutputMode variants are handled
         // If a new variant is added to OutputMode without updating output_text,
         // this will cause a compile error
-        let modes = [OutputMode::TypeIntoField, OutputMode::Clipboard, OutputMode::Both];
+        let modes = [
+            OutputMode::TypeIntoField,
+            OutputMode::Clipboard,
+            OutputMode::Both,
+        ];
         for mode in &modes {
             let _ = output_text("test", mode);
         }

@@ -39,12 +39,9 @@ pub fn run() {
         )
         .manage(app_state)
         .setup(|app| {
-            use tauri_plugin_global_shortcut::{
-                Code, GlobalShortcutExt, Modifiers, Shortcut,
-            };
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
-            let shortcut =
-                Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space);
+            let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space);
             app.global_shortcut().register(shortcut)?;
             Ok(())
         })

@@ -9,6 +9,10 @@ edition = "2021"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["cuda"]
+cuda = ["whisper-rs/cuda"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -19,7 +23,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-whisper-rs = { version = "0.15", features = ["cuda"] }
+whisper-rs = { version = "0.15" }
 cpal = "0.15"
 enigo = { version = "0.6", features = ["x11rb", "wayland"] }
 arboard = "3"

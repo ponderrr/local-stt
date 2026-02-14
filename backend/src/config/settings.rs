@@ -205,7 +205,10 @@ mod tests {
     #[test]
     fn test_invalid_output_mode_fails() {
         let result: Result<OutputMode, _> = serde_json::from_str("\"invalid_mode\"");
-        assert!(result.is_err(), "invalid output mode should fail deserialization");
+        assert!(
+            result.is_err(),
+            "invalid output mode should fail deserialization"
+        );
     }
 
     #[test]
@@ -350,7 +353,10 @@ mod tests {
 
         let content = fs::read_to_string(&config_path).unwrap();
         let result: Result<Config, _> = serde_json::from_str(&content);
-        assert!(result.is_err(), "corrupted config file should fail to parse");
+        assert!(
+            result.is_err(),
+            "corrupted config file should fail to parse"
+        );
     }
 
     #[test]

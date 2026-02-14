@@ -37,7 +37,10 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
         .map_err(|e| format!("Download request failed: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Download failed with status: {}", response.status()));
+        return Err(format!(
+            "Download failed with status: {}",
+            response.status()
+        ));
     }
 
     let total = response.content_length().unwrap_or(model.size_bytes);
@@ -141,7 +144,10 @@ mod tests {
     #[test]
     fn test_delete_model_nonexistent_id_returns_error() {
         let result = delete_model("nonexistent-model-abc");
-        assert!(result.is_err(), "deleting a nonexistent model ID should return error");
+        assert!(
+            result.is_err(),
+            "deleting a nonexistent model ID should return error"
+        );
     }
 
     #[test]
@@ -150,7 +156,10 @@ mod tests {
         // (it checks path.exists() and skips if not found)
         let result = delete_model("tiny");
         // This should not error -- it checks if the file exists first
-        assert!(result.is_ok(), "deleting a valid model ID with no file on disk should succeed");
+        assert!(
+            result.is_ok(),
+            "deleting a valid model ID with no file on disk should succeed"
+        );
     }
 
     #[test]

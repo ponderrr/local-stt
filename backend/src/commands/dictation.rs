@@ -59,7 +59,9 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                         for segment in &segments {
                             if let Err(e) = output::output_text(&segment.text, &output_mode) {
                                 eprintln!("Output error: {}", e);
-                                app_clone.emit("output-error", format!("Failed to output text: {}", e)).ok();
+                                app_clone
+                                    .emit("output-error", format!("Failed to output text: {}", e))
+                                    .ok();
                             }
                             app_clone
                                 .emit(
@@ -74,7 +76,12 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     }
                     Err(e) => {
                         eprintln!("Transcription error: {}", e);
-                        app_clone.emit("transcription-error", format!("Transcription failed: {}", e)).ok();
+                        app_clone
+                            .emit(
+                                "transcription-error",
+                                format!("Transcription failed: {}", e),
+                            )
+                            .ok();
                     }
                 }
             }

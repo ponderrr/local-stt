@@ -68,7 +68,6 @@ impl AudioRingBuffer {
         self.samples_since_last = 0;
         Some(chunk)
     }
-
 }
 
 #[cfg(test)]
@@ -81,8 +80,14 @@ mod tests {
     fn test_new_buffer_computes_sizes_correctly() {
         // 16kHz, 3s chunk, 500ms overlap, 30s capacity
         let buf = AudioRingBuffer::new(16000, 3000, 500, 30);
-        assert_eq!(buf.chunk_size, 48000, "chunk_size should be 16000 * 3000 / 1000");
-        assert_eq!(buf.overlap_size, 8000, "overlap_size should be 16000 * 500 / 1000");
+        assert_eq!(
+            buf.chunk_size, 48000,
+            "chunk_size should be 16000 * 3000 / 1000"
+        );
+        assert_eq!(
+            buf.overlap_size, 8000,
+            "overlap_size should be 16000 * 500 / 1000"
+        );
         assert_eq!(buf.capacity, 480000, "capacity should be 16000 * 30");
         assert_eq!(buf.write_pos, 0);
         assert_eq!(buf.samples_since_last, 0);
@@ -91,7 +96,10 @@ mod tests {
     #[test]
     fn test_new_buffer_data_initialized_to_zero() {
         let buf = AudioRingBuffer::new(16000, 3000, 500, 30);
-        assert!(buf.data.iter().all(|&s| s == 0.0), "buffer data should be initialized to 0.0");
+        assert!(
+            buf.data.iter().all(|&s| s == 0.0),
+            "buffer data should be initialized to 0.0"
+        );
     }
 
     // --- Write Tests ---
@@ -113,7 +121,8 @@ mod tests {
         for i in 0..10 {
             assert!(
                 (buf.data[i] - i as f32 * 0.1).abs() < 1e-6,
-                "sample at index {} should match written value", i
+                "sample at index {} should match written value",
+                i
             );
         }
     }
@@ -172,7 +181,10 @@ mod tests {
         let mut buf = AudioRingBuffer::new(16000, 3000, 500, 30);
         // Write less than chunk_size - overlap_size = 40000 samples
         buf.write(&vec![0.0f32; 39999]);
-        assert!(!buf.has_chunk(), "buffer with insufficient samples should not have a chunk");
+        assert!(
+            !buf.has_chunk(),
+            "buffer with insufficient samples should not have a chunk"
+        );
     }
 
     #[test]
@@ -180,7 +192,10 @@ mod tests {
         let mut buf = AudioRingBuffer::new(16000, 3000, 500, 30);
         // chunk_size = 48000, need at least 48000 total and 40000 since last
         buf.write(&vec![0.0f32; 48000]);
-        assert!(buf.has_chunk(), "buffer with chunk_size samples should have a chunk");
+        assert!(
+            buf.has_chunk(),
+            "buffer with chunk_size samples should have a chunk"
+        );
     }
 
     #[test]
@@ -189,7 +204,10 @@ mod tests {
         buf.write(&vec![0.0f32; 48000]);
         buf.extract_chunk();
         // After extraction, samples_since_last is reset to 0
-        assert!(!buf.has_chunk(), "should not have chunk immediately after extraction");
+        assert!(
+            !buf.has_chunk(),
+            "should not have chunk immediately after extraction"
+        );
     }
 
     #[test]
@@ -199,7 +217,10 @@ mod tests {
         buf.extract_chunk();
         // Now write chunk_size - overlap_size = 40000 more samples
         buf.write(&vec![0.0f32; 40000]);
-        assert!(buf.has_chunk(), "should have chunk after writing chunk_size - overlap_size samples");
+        assert!(
+            buf.has_chunk(),
+            "should have chunk after writing chunk_size - overlap_size samples"
+        );
     }
 
     // --- extract_chunk Tests ---
@@ -207,7 +228,10 @@ mod tests {
     #[test]
     fn test_extract_chunk_returns_none_when_no_chunk() {
         let mut buf = AudioRingBuffer::new(16000, 3000, 500, 30);
-        assert!(buf.extract_chunk().is_none(), "should return None with no data");
+        assert!(
+            buf.extract_chunk().is_none(),
+            "should return None with no data"
+        );
     }
 
     #[test]
@@ -215,7 +239,11 @@ mod tests {
         let mut buf = AudioRingBuffer::new(16000, 3000, 500, 30);
         buf.write(&vec![0.0f32; 48000]);
         let chunk = buf.extract_chunk().unwrap();
-        assert_eq!(chunk.len(), 48000, "chunk should be exactly chunk_size samples");
+        assert_eq!(
+            chunk.len(),
+            48000,
+            "chunk should be exactly chunk_size samples"
+        );
     }
 
     #[test]
@@ -228,7 +256,8 @@ mod tests {
         for (i, &val) in chunk.iter().enumerate() {
             assert!(
                 (val - (i as f32) / 48000.0).abs() < 1e-6,
-                "chunk sample {} should match written data", i
+                "chunk sample {} should match written data",
+                i
             );
         }
     }
@@ -238,7 +267,10 @@ mod tests {
         let mut buf = AudioRingBuffer::new(16000, 3000, 500, 30);
         buf.write(&vec![0.0f32; 48000]);
         buf.extract_chunk();
-        assert_eq!(buf.samples_since_last, 0, "samples_since_last should be reset after extraction");
+        assert_eq!(
+            buf.samples_since_last, 0,
+            "samples_since_last should be reset after extraction"
+        );
     }
 
     #[test]
@@ -247,7 +279,10 @@ mod tests {
         buf.write(&vec![0.0f32; 48000]);
         let pos_before = buf.write_pos;
         buf.extract_chunk();
-        assert_eq!(buf.write_pos, pos_before, "write_pos should not change after extraction");
+        assert_eq!(
+            buf.write_pos, pos_before,
+            "write_pos should not change after extraction"
+        );
     }
 
     // --- Basic (original) Tests ---
@@ -331,7 +366,10 @@ mod tests {
         // Write exactly chunk_size - overlap_size = 40000 ... but total < chunk_size
         buf.write(&vec![0.0f32; 40000]);
         // samples_since_last = 40000 >= 40000 but write_pos = 40000 < 48000
-        assert!(!buf.has_chunk(), "should not have chunk if write_pos < chunk_size");
+        assert!(
+            !buf.has_chunk(),
+            "should not have chunk if write_pos < chunk_size"
+        );
 
         // Write the remaining 8000 to reach chunk_size
         buf.write(&vec![0.0f32; 8000]);

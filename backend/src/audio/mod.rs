@@ -63,8 +63,14 @@ mod tests {
         let input = vec![1.0, 3.0, 2.0, 4.0];
         let result = to_mono(&input, 2);
         assert_eq!(result.len(), 2, "stereo->mono should halve sample count");
-        assert!((result[0] - 2.0).abs() < 1e-6, "first sample should be avg of 1.0 and 3.0");
-        assert!((result[1] - 3.0).abs() < 1e-6, "second sample should be avg of 2.0 and 4.0");
+        assert!(
+            (result[0] - 2.0).abs() < 1e-6,
+            "first sample should be avg of 1.0 and 3.0"
+        );
+        assert!(
+            (result[1] - 3.0).abs() < 1e-6,
+            "second sample should be avg of 2.0 and 4.0"
+        );
     }
 
     #[test]
@@ -79,7 +85,10 @@ mod tests {
         let input = vec![1.0, 2.0, 3.0, 4.0]; // one frame of 4 channels
         let result = to_mono(&input, 4);
         assert_eq!(result.len(), 1);
-        assert!((result[0] - 2.5).abs() < 1e-6, "should average all 4 channels: (1+2+3+4)/4 = 2.5");
+        assert!(
+            (result[0] - 2.5).abs() < 1e-6,
+            "should average all 4 channels: (1+2+3+4)/4 = 2.5"
+        );
     }
 
     #[test]
@@ -88,7 +97,8 @@ mod tests {
         let mono_signal: Vec<f32> = (0..1000)
             .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin())
             .collect();
-        let stereo: Vec<f32> = mono_signal.iter()
+        let stereo: Vec<f32> = mono_signal
+            .iter()
             .flat_map(|&s| vec![s, s]) // duplicate to both channels
             .collect();
 
@@ -97,7 +107,10 @@ mod tests {
         for (i, (&expected, &actual)) in mono_signal.iter().zip(result.iter()).enumerate() {
             assert!(
                 (expected - actual).abs() < 1e-6,
-                "sample {} mismatch: expected {}, got {}", i, expected, actual
+                "sample {} mismatch: expected {}, got {}",
+                i,
+                expected,
+                actual
             );
         }
     }
@@ -107,7 +120,11 @@ mod tests {
         // chunks_exact drops remainder, so odd sample count is handled
         let input = vec![1.0, 3.0, 2.0]; // 1.5 frames of stereo -- last sample dropped
         let result = to_mono(&input, 2);
-        assert_eq!(result.len(), 1, "remainder samples should be dropped by chunks_exact");
+        assert_eq!(
+            result.len(),
+            1,
+            "remainder samples should be dropped by chunks_exact"
+        );
         assert!((result[0] - 2.0).abs() < 1e-6);
     }
 
@@ -131,7 +148,11 @@ mod tests {
         // 48kHz to 16kHz is a 3:1 ratio
         let input = vec![0.0f32; 4800]; // 100ms at 48kHz
         let result = resample(&input, 48000, 16000);
-        assert_eq!(result.len(), 1600, "48kHz->16kHz should produce 1/3 the samples");
+        assert_eq!(
+            result.len(),
+            1600,
+            "48kHz->16kHz should produce 1/3 the samples"
+        );
     }
 
     #[test]
@@ -140,7 +161,11 @@ mod tests {
         let input = vec![0.0f32; 4410]; // 100ms at 44.1kHz
         let result = resample(&input, 44100, 16000);
         let expected_len = (4410.0 / (44100.0 / 16000.0)) as usize;
-        assert_eq!(result.len(), expected_len, "44.1kHz->16kHz should produce correct sample count");
+        assert_eq!(
+            result.len(),
+            expected_len,
+            "44.1kHz->16kHz should produce correct sample count"
+        );
     }
 
     #[test]
@@ -151,7 +176,9 @@ mod tests {
         for (i, &val) in result.iter().enumerate() {
             assert!(
                 (val - 0.75).abs() < 1e-5,
-                "constant signal should be preserved after resampling, sample {} = {}", i, val
+                "constant signal should be preserved after resampling, sample {} = {}",
+                i,
+                val
             );
         }
     }
@@ -171,7 +198,10 @@ mod tests {
             let expected = (2.0 * std::f32::consts::PI * freq * i as f32 / 16000.0).sin();
             assert!(
                 (val - expected).abs() < 0.05,
-                "resampled sine wave sample {} deviates: expected {}, got {}", i, expected, val
+                "resampled sine wave sample {} deviates: expected {}, got {}",
+                i,
+                expected,
+                val
             );
         }
     }
@@ -181,7 +211,11 @@ mod tests {
         // Test upsampling from 16kHz to 48kHz
         let input = vec![0.0f32; 1600]; // 100ms at 16kHz
         let result = resample(&input, 16000, 48000);
-        assert_eq!(result.len(), 4800, "16kHz->48kHz should produce 3x the samples");
+        assert_eq!(
+            result.len(),
+            4800,
+            "16kHz->48kHz should produce 3x the samples"
+        );
     }
 
     #[test]
@@ -190,7 +224,10 @@ mod tests {
         let result = resample(&input, 48000, 16000);
         // Output length should be 0 since (1.0 / 3.0) as usize = 0
         // This is an edge case -- very short input produces empty output
-        assert!(result.is_empty() || result.len() == 1, "single sample resampling is an edge case");
+        assert!(
+            result.is_empty() || result.len() == 1,
+            "single sample resampling is an edge case"
+        );
     }
 
     #[test]
@@ -204,7 +241,9 @@ mod tests {
         for (i, &val) in result.iter().enumerate() {
             assert!(
                 val >= -1.0 - 1e-6 && val <= 1.0 + 1e-6,
-                "resampled sample {} = {} is out of [-1, 1] range", i, val
+                "resampled sample {} = {} is out of [-1, 1] range",
+                i,
+                val
             );
         }
     }

@@ -51,8 +51,12 @@ impl AudioCapture {
             .map_err(|e| format!("Failed to get default input config: {}", e))?;
 
         let sample_format = supported_config.sample_format();
-        eprintln!("[audio] Device config: rate={}Hz, channels={}, format={:?}",
-            supported_config.sample_rate().0, supported_config.channels(), sample_format);
+        eprintln!(
+            "[audio] Device config: rate={}Hz, channels={}, format={:?}",
+            supported_config.sample_rate().0,
+            supported_config.channels(),
+            sample_format
+        );
         let config: StreamConfig = supported_config.into();
         self.device_sample_rate = config.sample_rate.0;
         self.device_channels = config.channels;

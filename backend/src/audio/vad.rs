@@ -65,7 +65,6 @@ impl VoiceActivityDetector {
 
         any_speech
     }
-
 }
 
 #[cfg(test)]
@@ -78,13 +77,19 @@ mod tests {
     fn test_rms_energy_of_silence_is_zero() {
         let silence = vec![0.0f32; 480];
         let energy = VoiceActivityDetector::rms_energy(&silence);
-        assert!((energy - 0.0).abs() < 1e-10, "RMS energy of silence should be 0.0");
+        assert!(
+            (energy - 0.0).abs() < 1e-10,
+            "RMS energy of silence should be 0.0"
+        );
     }
 
     #[test]
     fn test_rms_energy_of_empty_slice_is_zero() {
         let energy = VoiceActivityDetector::rms_energy(&[]);
-        assert!((energy - 0.0).abs() < 1e-10, "RMS energy of empty slice should be 0.0");
+        assert!(
+            (energy - 0.0).abs() < 1e-10,
+            "RMS energy of empty slice should be 0.0"
+        );
     }
 
     #[test]
@@ -94,7 +99,8 @@ mod tests {
         let energy = VoiceActivityDetector::rms_energy(&constant);
         assert!(
             (energy - 0.5).abs() < 1e-5,
-            "RMS energy of constant 0.5 should be 0.5, got {}", energy
+            "RMS energy of constant 0.5 should be 0.5, got {}",
+            energy
         );
     }
 
@@ -108,7 +114,8 @@ mod tests {
         let expected = 1.0 / (2.0f32).sqrt();
         assert!(
             (energy - expected).abs() < 0.01,
-            "RMS of unit sine should be ~0.707, got {}", energy
+            "RMS of unit sine should be ~0.707, got {}",
+            energy
         );
     }
 
@@ -130,7 +137,8 @@ mod tests {
         let energy = VoiceActivityDetector::rms_energy(&[0.8]);
         assert!(
             (energy - 0.8).abs() < 1e-6,
-            "RMS of single sample 0.8 should be 0.8, got {}", energy
+            "RMS of single sample 0.8 should be 0.8, got {}",
+            energy
         );
     }
 
@@ -157,7 +165,10 @@ mod tests {
         let mut vad = VoiceActivityDetector::new(0.01);
         let silence = vec![0.0f32; 480];
         for _ in 0..100 {
-            assert!(!vad.process_frame(&silence), "silent frames should never trigger speech");
+            assert!(
+                !vad.process_frame(&silence),
+                "silent frames should never trigger speech"
+            );
         }
     }
 
@@ -180,9 +191,15 @@ mod tests {
         let speech: Vec<f32> = (0..480).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
 
         // Frame 1: not yet speech
-        assert!(!vad.process_frame(&speech), "1 frame should not trigger speech");
+        assert!(
+            !vad.process_frame(&speech),
+            "1 frame should not trigger speech"
+        );
         // Frame 2: not yet speech
-        assert!(!vad.process_frame(&speech), "2 frames should not trigger speech");
+        assert!(
+            !vad.process_frame(&speech),
+            "2 frames should not trigger speech"
+        );
         // Frame 3: now speech is detected (min_speech_frames = 3)
         assert!(vad.process_frame(&speech), "3 frames should trigger speech");
     }
@@ -225,7 +242,10 @@ mod tests {
 
         // 10th silent frame ends speech
         let result = vad.process_frame(&silence);
-        assert!(!result, "speech should end after 10 consecutive silent frames");
+        assert!(
+            !result,
+            "speech should end after 10 consecutive silent frames"
+        );
     }
 
     #[test]
@@ -243,17 +263,26 @@ mod tests {
         for _ in 0..5 {
             vad.process_frame(&silence);
         }
-        assert!(vad.is_speech, "should still be in speech state after only 5 silent frames");
+        assert!(
+            vad.is_speech,
+            "should still be in speech state after only 5 silent frames"
+        );
 
         // 1 speech frame resets the silence counter
         vad.process_frame(&speech);
-        assert_eq!(vad.silence_frame_count, 0, "silence count should be reset by speech");
+        assert_eq!(
+            vad.silence_frame_count, 0,
+            "silence count should be reset by speech"
+        );
 
         // Another 5 silent frames (total 5, not 10)
         for _ in 0..5 {
             vad.process_frame(&silence);
         }
-        assert!(vad.is_speech, "should still be in speech after reset + 5 silent frames");
+        assert!(
+            vad.is_speech,
+            "should still be in speech after reset + 5 silent frames"
+        );
     }
 
     // --- process_frame: Threshold Boundary ---
@@ -270,12 +299,17 @@ mod tests {
         let energy = VoiceActivityDetector::rms_energy(&frame);
         assert!(
             energy < threshold,
-            "energy {} should be below threshold {}", energy, threshold
+            "energy {} should be below threshold {}",
+            energy,
+            threshold
         );
 
         // This should count as silence, speech should never trigger
         for _ in 0..10 {
-            assert!(!vad.process_frame(&frame), "energy below threshold should be treated as silence");
+            assert!(
+                !vad.process_frame(&frame),
+                "energy below threshold should be treated as silence"
+            );
         }
     }
 
@@ -289,7 +323,10 @@ mod tests {
         // Should trigger speech after min_speech_frames
         vad.process_frame(&frame);
         vad.process_frame(&frame);
-        assert!(vad.process_frame(&frame), "energy above threshold should be detected as speech");
+        assert!(
+            vad.process_frame(&frame),
+            "energy above threshold should be detected as speech"
+        );
     }
 
     // --- contains_speech Tests ---
@@ -298,17 +335,21 @@ mod tests {
     fn test_contains_speech_with_silence() {
         let mut vad = VoiceActivityDetector::new(0.01);
         let silence = vec![0.0f32; 4800]; // 300ms at 16kHz = 10 frames
-        assert!(!vad.contains_speech(&silence), "silence should not be detected as speech");
+        assert!(
+            !vad.contains_speech(&silence),
+            "silence should not be detected as speech"
+        );
     }
 
     #[test]
     fn test_contains_speech_with_speech() {
         let mut vad = VoiceActivityDetector::new(0.01);
         // Generate a 480ms signal (16 frames) of loud audio
-        let speech: Vec<f32> = (0..7680)
-            .map(|i| (i as f32 * 0.1).sin() * 0.5)
-            .collect();
-        assert!(vad.contains_speech(&speech), "loud audio should be detected as speech");
+        let speech: Vec<f32> = (0..7680).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+        assert!(
+            vad.contains_speech(&speech),
+            "loud audio should be detected as speech"
+        );
     }
 
     #[test]
@@ -322,16 +363,17 @@ mod tests {
         audio.extend_from_slice(&speech_frames);
 
         // contains_speech returns true if any frame triggered speech
-        assert!(vad.contains_speech(&audio), "audio with some speech should be detected");
+        assert!(
+            vad.contains_speech(&audio),
+            "audio with some speech should be detected"
+        );
     }
 
     #[test]
     fn test_contains_speech_non_multiple_frame_size() {
         let mut vad = VoiceActivityDetector::new(0.01);
         // Audio that does not divide evenly into 480-sample frames
-        let speech: Vec<f32> = (0..1000)
-            .map(|i| (i as f32 * 0.1).sin() * 0.5)
-            .collect();
+        let speech: Vec<f32> = (0..1000).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
         // This should not panic. chunks() handles the remainder.
         let _ = vad.contains_speech(&speech);
     }
@@ -343,7 +385,10 @@ mod tests {
         let mut vad = VoiceActivityDetector::new(0.5); // Very high threshold
         let quiet: Vec<f32> = (0..480).map(|i| (i as f32 * 0.1).sin() * 0.1).collect();
         for _ in 0..10 {
-            assert!(!vad.process_frame(&quiet), "quiet signal should not exceed high threshold");
+            assert!(
+                !vad.process_frame(&quiet),
+                "quiet signal should not exceed high threshold"
+            );
         }
     }
 
@@ -353,6 +398,9 @@ mod tests {
         let tiny = vec![0.0001f32; 480];
         vad.process_frame(&tiny);
         vad.process_frame(&tiny);
-        assert!(vad.process_frame(&tiny), "any nonzero signal should trigger speech with threshold 0");
+        assert!(
+            vad.process_frame(&tiny),
+            "any nonzero signal should trigger speech with threshold 0"
+        );
     }
 }
