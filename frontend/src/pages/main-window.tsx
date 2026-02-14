@@ -12,20 +12,19 @@ export function MainWindow() {
   const [showSettings, setShowSettings] = useState(false);
   const { status, toggle: _toggle, error } = useDictation();
   const { transcript, clear } = useTranscription();
-  const { models, activeModel, loadModel } = useModels();
+  const { models, activeModel, loadModel, loading } = useModels();
   const { config } = useConfig();
 
   useEffect(() => {
-    if (config && !activeModel) {
-      const defaultModel = config.default_model;
-      const isDownloaded = models.find(
-        (m) => m.id === defaultModel && m.downloaded
-      );
-      if (isDownloaded) {
-        loadModel(defaultModel);
-      }
+    if (loading || !config || activeModel) return;
+    const defaultModel = config.default_model;
+    const isDownloaded = models.find(
+      (m) => m.id === defaultModel && m.downloaded
+    );
+    if (isDownloaded) {
+      loadModel(defaultModel);
     }
-  }, [config, models, activeModel, loadModel]);
+  }, [loading, config, models, activeModel, loadModel]);
 
   return (
     <div className="h-screen flex flex-col bg-[#0f0f11] text-foreground p-6">

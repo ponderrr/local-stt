@@ -5,6 +5,7 @@ export function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [activeModel, setActiveModel] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
@@ -14,6 +15,8 @@ export function useModels() {
       setActiveModel(active);
     } catch (err) {
       console.error("Failed to fetch models:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -63,5 +66,5 @@ export function useModels() {
     }
   }, [refresh]);
 
-  return { models, activeModel, loadModel, downloadModel, deleteModel, downloadProgress, refresh };
+  return { models, activeModel, loadModel, downloadModel, deleteModel, downloadProgress, refresh, loading };
 }
