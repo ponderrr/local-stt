@@ -1,7 +1,7 @@
 pub mod clipboard;
 pub mod keyboard;
 
-use crate::config::settings::OutputMode;
+use crate::config::OutputMode;
 
 pub fn output_text(text: &str, mode: &OutputMode) -> Result<(), String> {
     match mode {

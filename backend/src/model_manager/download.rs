@@ -1,4 +1,4 @@
-use crate::config::settings::Config;
+use crate::config::Config;
 use crate::transcription::models::get_model_registry;
 use futures_util::StreamExt;
 use reqwest::Client;
@@ -23,8 +23,11 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
         }
     }
 
-    // Ensure models directory exists
-    Config::ensure_dirs().map_err(|e| format!("Failed to ensure dirs: {}", e))?;
+    // Ensure models directory exists (use tokio async version for robustness)
+    let models_dir = Config::models_dir();
+    tokio::fs::create_dir_all(&models_dir)
+        .await
+        .map_err(|e| format!("Failed to create models dir: {}", e))?;
 
     let client = Client::new();
     let response = client
@@ -72,6 +75,9 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
     file.flush()
         .await
         .map_err(|e| format!("Failed to flush file: {}", e))?;
+
+    // Close the file handle before renaming to ensure all data is written
+    drop(file);
 
     // Atomic rename: temp -> final destination
     tokio::fs::rename(&temp_path, &dest)

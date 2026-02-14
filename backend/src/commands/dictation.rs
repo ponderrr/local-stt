@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::audio::AudioPipeline;
-use crate::config::settings::Config;
+use crate::config::Config;
 use crate::output;
 use crate::transcription::engine::TranscriptionEngine;
 
