@@ -69,12 +69,6 @@ impl AudioRingBuffer {
         Some(chunk)
     }
 
-    /// Reset the buffer.
-    pub fn clear(&mut self) {
-        self.write_pos = 0;
-        self.samples_since_last = 0;
-        self.data.fill(0.0);
-    }
 }
 
 #[cfg(test)]

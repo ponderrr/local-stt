@@ -66,11 +66,6 @@ impl VoiceActivityDetector {
         any_speech
     }
 
-    pub fn reset(&mut self) {
-        self.speech_frame_count = 0;
-        self.silence_frame_count = 0;
-        self.is_speech = false;
-    }
 }
 
 #[cfg(test)]

@@ -76,11 +76,4 @@ impl AudioCapture {
         Ok(())
     }
 
-    pub fn stop(&mut self) {
-        self.stream = None; // Drop the stream, which stops capture
-    }
-
-    pub fn is_active(&self) -> bool {
-        self.stream.is_some()
-    }
 }

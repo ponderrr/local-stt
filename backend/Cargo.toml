@@ -25,6 +25,5 @@ enigo = { version = "0.6", features = ["x11rb", "wayland"] }
 arboard = "3"
 reqwest = { version = "0.12", features = ["stream", "json"] }
 tokio = { version = "1", features = ["full"] }
-hound = "3"
 dirs = "5"
 futures-util = "0.3"
