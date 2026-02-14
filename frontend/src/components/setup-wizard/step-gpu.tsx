@@ -12,7 +12,7 @@ export function StepGpu({ onNext }: StepGpuProps) {
   useEffect(() => {
     commands
       .getGpuInfo()
-      .then((info) => setGpu(info as unknown as GpuInfo))
+      .then((info) => setGpu(info))
       .catch(() => setGpu(null))
       .finally(() => setLoading(false));
   }, []);
