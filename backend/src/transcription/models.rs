@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhisperModel {
@@ -10,7 +11,7 @@ pub struct WhisperModel {
     pub vram_mb: u16,
 }
 
-pub fn get_model_registry() -> Vec<WhisperModel> {
+static MODEL_REGISTRY: LazyLock<Vec<WhisperModel>> = LazyLock::new(|| {
     vec![
         WhisperModel {
             id: "tiny".to_string(),
@@ -58,6 +59,10 @@ pub fn get_model_registry() -> Vec<WhisperModel> {
             vram_mb: 6000,
         },
     ]
+});
+
+pub fn get_model_registry() -> &'static [WhisperModel] {
+    &MODEL_REGISTRY
 }
 
 #[cfg(test)]
