@@ -5,7 +5,7 @@ interface StepCompleteProps {
 export function StepComplete({ onFinish }: StepCompleteProps) {
   return (
     <div className="bg-[#131316] border border-white/[0.08] rounded-lg p-8 text-center space-y-6">
-      <div className="text-4xl">Microphone</div>
+      <div className="text-6xl">{'\u2714'}</div>
       <h2 className="text-lg font-semibold text-foreground">You're All Set</h2>
       <p className="text-sm text-muted-foreground">
         Press <span className="font-mono text-foreground">Ctrl+Shift+Space</span> anywhere
