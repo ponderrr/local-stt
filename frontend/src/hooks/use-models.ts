@@ -4,7 +4,6 @@ import { commands, events, type ModelInfo } from "@/lib/tauri";
 export function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [activeModel, setActiveModel] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -24,11 +23,6 @@ export function useModels() {
     refresh();
 
     const unlisten = events.onDownloadProgress((data) => {
-      setDownloadProgress((prev) => ({
-        ...prev,
-        [data.model_id]: data.percent,
-      }));
-
       if (data.percent >= 100) {
         refresh();
       }
@@ -66,5 +60,5 @@ export function useModels() {
     }
   }, [refresh]);
 
-  return { models, activeModel, loadModel, downloadModel, deleteModel, downloadProgress, refresh, loading };
+  return { models, activeModel, loadModel, downloadModel, deleteModel, refresh, loading };
 }
