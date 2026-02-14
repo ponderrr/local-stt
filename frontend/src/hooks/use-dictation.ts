@@ -32,6 +32,17 @@ export function useDictation() {
     };
   }, []);
 
+  useEffect(() => {
+    const unlisten = events.onTranscriptionError((msg) => {
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      setError(msg);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const toggle = useCallback(async () => {
     try {
       const result = await commands.toggleDictation();

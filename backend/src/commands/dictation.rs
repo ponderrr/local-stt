@@ -63,6 +63,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     }
                     Err(e) => {
                         eprintln!("Transcription error: {}", e);
+                        app_clone.emit("transcription-error", format!("Transcription failed: {}", e)).ok();
                     }
                 }
             }

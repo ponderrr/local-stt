@@ -69,4 +69,6 @@ export const events = {
     listen<DownloadProgress>("download-progress", (event) => handler(event.payload)),
   onOutputError: (handler: (message: string) => void): Promise<UnlistenFn> =>
     listen<string>("output-error", (event) => handler(event.payload)),
+  onTranscriptionError: (handler: (message: string) => void): Promise<UnlistenFn> =>
+    listen<string>("transcription-error", (event) => handler(event.payload)),
 };
