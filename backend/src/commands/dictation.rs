@@ -10,12 +10,21 @@ pub struct AppState {
     pub engine: Arc<TranscriptionEngine>,
     pub pipeline: AudioPipeline,
     pub config: Mutex<Config>,
+    pub transcription_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+fn join_transcription_thread(state: &AppState) {
+    let handle = state.transcription_thread.lock().unwrap().take();
+    if let Some(h) = handle {
+        h.join().ok();
+    }
 }
 
 /// Core toggle logic, callable from both Tauri commands and the global hotkey handler.
 pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool, String> {
     if state.pipeline.is_running() {
         state.pipeline.stop();
+        join_transcription_thread(state);
         app.emit("dictation-status", "idle").ok();
         Ok(false)
     } else {
@@ -38,10 +47,12 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
 
         app.emit("dictation-status", "listening").ok();
 
+        join_transcription_thread(state);
+
         let engine = state.engine.clone();
         let app_clone = app.clone();
 
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             while let Ok(chunk) = receiver.recv() {
                 match engine.transcribe(&chunk, &language) {
                     Ok(segments) => {
@@ -69,6 +80,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             }
             app_clone.emit("dictation-status", "idle").ok();
         });
+        *state.transcription_thread.lock().unwrap() = Some(handle);
 
         Ok(true)
     }
@@ -91,6 +103,7 @@ pub fn start_dictation(state: State<'_, AppState>, app: AppHandle) -> Result<(),
 pub fn stop_dictation(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     if state.pipeline.is_running() {
         state.pipeline.stop();
+        join_transcription_thread(&state);
         app.emit("dictation-status", "idle").ok();
     }
     Ok(())

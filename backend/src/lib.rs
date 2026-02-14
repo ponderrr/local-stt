@@ -20,6 +20,7 @@ pub fn run() {
         engine: Arc::new(TranscriptionEngine::new()),
         pipeline: audio::AudioPipeline::new(),
         config: Mutex::new(config),
+        transcription_thread: Mutex::new(None),
     };
 
     tauri::Builder::default()
