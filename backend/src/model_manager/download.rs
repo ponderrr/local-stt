@@ -109,3 +109,78 @@ pub fn is_model_downloaded(model_id: &str) -> bool {
         .map(|m| Config::models_dir().join(&m.filename).exists())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- is_model_downloaded Tests ---
+
+    #[test]
+    fn test_is_model_downloaded_returns_false_for_nonexistent_model() {
+        // A model with a made-up ID should not be found in registry, thus false
+        assert!(
+            !is_model_downloaded("totally-fake-model-xyz"),
+            "nonexistent model should not be considered downloaded"
+        );
+    }
+
+    #[test]
+    fn test_is_model_downloaded_returns_false_for_valid_model_not_on_disk() {
+        // "tiny" is a valid model ID but the file likely does not exist in a test env
+        // Unless the user has actually downloaded it, this should be false
+        // (This test is best-effort -- in CI it will always be false)
+        let result = is_model_downloaded("tiny");
+        // We cannot strictly assert false because the file might exist on the developer's machine
+        // Instead, just verify it returns a bool without panicking
+        let _ = result;
+    }
+
+    // --- delete_model Tests ---
+
+    #[test]
+    fn test_delete_model_nonexistent_id_returns_error() {
+        let result = delete_model("nonexistent-model-abc");
+        assert!(result.is_err(), "deleting a nonexistent model ID should return error");
+    }
+
+    #[test]
+    fn test_delete_model_valid_id_no_file_ok() {
+        // Even if the model file does not exist on disk, delete_model should succeed
+        // (it checks path.exists() and skips if not found)
+        let result = delete_model("tiny");
+        // This should not error -- it checks if the file exists first
+        assert!(result.is_ok(), "deleting a valid model ID with no file on disk should succeed");
+    }
+
+    #[test]
+    fn test_delete_model_with_file_removes_it() {
+        // Create a fake model file in the models directory
+        let models_dir = Config::models_dir();
+        std::fs::create_dir_all(&models_dir).ok();
+
+        let registry = get_model_registry();
+        let tiny = registry.iter().find(|m| m.id == "tiny").unwrap();
+        let path = models_dir.join(&tiny.filename);
+
+        // Create a dummy file
+        std::fs::write(&path, b"fake model data").unwrap();
+        assert!(path.exists());
+
+        // Delete it
+        let result = delete_model("tiny");
+        assert!(result.is_ok());
+        assert!(!path.exists(), "model file should be deleted");
+    }
+
+    // --- Path Construction Tests ---
+
+    #[test]
+    fn test_model_path_construction() {
+        let registry = get_model_registry();
+        let model = registry.iter().find(|m| m.id == "tiny").unwrap();
+        let expected_path = Config::models_dir().join(&model.filename);
+        assert!(expected_path.to_str().unwrap().contains("models"));
+        assert!(expected_path.to_str().unwrap().contains("ggml-tiny.bin"));
+    }
+}

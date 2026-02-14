@@ -44,6 +44,172 @@ fn resample(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
     output
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- to_mono Tests ---
+
+    #[test]
+    fn test_to_mono_passthrough_single_channel() {
+        let input = vec![1.0, 2.0, 3.0, 4.0];
+        let result = to_mono(&input, 1);
+        assert_eq!(result, input, "mono input should pass through unchanged");
+    }
+
+    #[test]
+    fn test_to_mono_stereo_averages_channels() {
+        // Interleaved stereo: [L0, R0, L1, R1, ...]
+        let input = vec![1.0, 3.0, 2.0, 4.0];
+        let result = to_mono(&input, 2);
+        assert_eq!(result.len(), 2, "stereo->mono should halve sample count");
+        assert!((result[0] - 2.0).abs() < 1e-6, "first sample should be avg of 1.0 and 3.0");
+        assert!((result[1] - 3.0).abs() < 1e-6, "second sample should be avg of 2.0 and 4.0");
+    }
+
+    #[test]
+    fn test_to_mono_empty_input() {
+        let result = to_mono(&[], 2);
+        assert!(result.is_empty(), "empty input should produce empty output");
+    }
+
+    #[test]
+    fn test_to_mono_multichannel() {
+        // 4 channels: [C0, C1, C2, C3] per frame
+        let input = vec![1.0, 2.0, 3.0, 4.0]; // one frame of 4 channels
+        let result = to_mono(&input, 4);
+        assert_eq!(result.len(), 1);
+        assert!((result[0] - 2.5).abs() < 1e-6, "should average all 4 channels: (1+2+3+4)/4 = 2.5");
+    }
+
+    #[test]
+    fn test_to_mono_stereo_preserves_signal_shape() {
+        // Generate stereo sine wave (same signal on both channels)
+        let mono_signal: Vec<f32> = (0..1000)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin())
+            .collect();
+        let stereo: Vec<f32> = mono_signal.iter()
+            .flat_map(|&s| vec![s, s]) // duplicate to both channels
+            .collect();
+
+        let result = to_mono(&stereo, 2);
+        assert_eq!(result.len(), 1000);
+        for (i, (&expected, &actual)) in mono_signal.iter().zip(result.iter()).enumerate() {
+            assert!(
+                (expected - actual).abs() < 1e-6,
+                "sample {} mismatch: expected {}, got {}", i, expected, actual
+            );
+        }
+    }
+
+    #[test]
+    fn test_to_mono_stereo_remainder_ignored() {
+        // chunks_exact drops remainder, so odd sample count is handled
+        let input = vec![1.0, 3.0, 2.0]; // 1.5 frames of stereo -- last sample dropped
+        let result = to_mono(&input, 2);
+        assert_eq!(result.len(), 1, "remainder samples should be dropped by chunks_exact");
+        assert!((result[0] - 2.0).abs() < 1e-6);
+    }
+
+    // --- resample Tests ---
+
+    #[test]
+    fn test_resample_same_rate_passthrough() {
+        let input = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = resample(&input, 16000, 16000);
+        assert_eq!(result, input, "same rate should pass through unchanged");
+    }
+
+    #[test]
+    fn test_resample_empty_input() {
+        let result = resample(&[], 48000, 16000);
+        assert!(result.is_empty(), "empty input should produce empty output");
+    }
+
+    #[test]
+    fn test_resample_48k_to_16k_ratio() {
+        // 48kHz to 16kHz is a 3:1 ratio
+        let input = vec![0.0f32; 4800]; // 100ms at 48kHz
+        let result = resample(&input, 48000, 16000);
+        assert_eq!(result.len(), 1600, "48kHz->16kHz should produce 1/3 the samples");
+    }
+
+    #[test]
+    fn test_resample_44100_to_16000_ratio() {
+        // 44.1kHz to 16kHz
+        let input = vec![0.0f32; 4410]; // 100ms at 44.1kHz
+        let result = resample(&input, 44100, 16000);
+        let expected_len = (4410.0 / (44100.0 / 16000.0)) as usize;
+        assert_eq!(result.len(), expected_len, "44.1kHz->16kHz should produce correct sample count");
+    }
+
+    #[test]
+    fn test_resample_preserves_dc_offset() {
+        // A constant signal at any rate should remain constant after resampling
+        let input = vec![0.75f32; 4800]; // 100ms at 48kHz
+        let result = resample(&input, 48000, 16000);
+        for (i, &val) in result.iter().enumerate() {
+            assert!(
+                (val - 0.75).abs() < 1e-5,
+                "constant signal should be preserved after resampling, sample {} = {}", i, val
+            );
+        }
+    }
+
+    #[test]
+    fn test_resample_low_frequency_signal_preserved() {
+        // A 100Hz sine wave sampled at 48kHz should be faithfully reproduced at 16kHz
+        // (well below Nyquist of 8kHz)
+        let freq = 100.0f32;
+        let input: Vec<f32> = (0..4800)
+            .map(|i| (2.0 * std::f32::consts::PI * freq * i as f32 / 48000.0).sin())
+            .collect();
+        let result = resample(&input, 48000, 16000);
+
+        // Verify the output is a 100Hz sine at 16kHz
+        for (i, &val) in result.iter().enumerate() {
+            let expected = (2.0 * std::f32::consts::PI * freq * i as f32 / 16000.0).sin();
+            assert!(
+                (val - expected).abs() < 0.05,
+                "resampled sine wave sample {} deviates: expected {}, got {}", i, expected, val
+            );
+        }
+    }
+
+    #[test]
+    fn test_resample_upsampling() {
+        // Test upsampling from 16kHz to 48kHz
+        let input = vec![0.0f32; 1600]; // 100ms at 16kHz
+        let result = resample(&input, 16000, 48000);
+        assert_eq!(result.len(), 4800, "16kHz->48kHz should produce 3x the samples");
+    }
+
+    #[test]
+    fn test_resample_single_sample() {
+        let input = vec![0.5f32];
+        let result = resample(&input, 48000, 16000);
+        // Output length should be 0 since (1.0 / 3.0) as usize = 0
+        // This is an edge case -- very short input produces empty output
+        assert!(result.is_empty() || result.len() == 1, "single sample resampling is an edge case");
+    }
+
+    #[test]
+    fn test_resample_output_in_valid_range() {
+        // If input is in [-1.0, 1.0], output should also be in [-1.0, 1.0]
+        // (linear interpolation preserves bounds)
+        let input: Vec<f32> = (0..4800)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin())
+            .collect();
+        let result = resample(&input, 48000, 16000);
+        for (i, &val) in result.iter().enumerate() {
+            assert!(
+                val >= -1.0 - 1e-6 && val <= 1.0 + 1e-6,
+                "resampled sample {} = {} is out of [-1, 1] range", i, val
+            );
+        }
+    }
+}
+
 pub struct AudioPipeline {
     is_running: Arc<AtomicBool>,
 }

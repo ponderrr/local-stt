@@ -28,3 +28,6 @@ tokio = { version = "1", features = ["full"] }
 dirs = "5"
 futures-util = "0.3"
 ringbuf = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
