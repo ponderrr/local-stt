@@ -4,6 +4,8 @@ pub mod vad;
 
 use buffer::AudioRingBuffer;
 use capture::AudioCapture;
+use ringbuf::traits::{Consumer, Split};
+use ringbuf::HeapRb;
 use std::sync::mpsc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -71,11 +73,15 @@ impl AudioPipeline {
         let running = is_running.clone();
 
         std::thread::spawn(move || {
-            let (audio_tx, audio_rx) = mpsc::channel::<Vec<f32>>();
+            // 3 seconds of audio at 48kHz stereo (conservative capacity)
+            let rb_capacity = 48000 * 2 * 3;
+            let rb = HeapRb::<f32>::new(rb_capacity);
+            let (producer, mut consumer) = rb.split();
+
             let mut capture = AudioCapture::new();
 
             // Try to start capture
-            if let Err(e) = capture.start(device_name.as_deref(), audio_tx) {
+            if let Err(e) = capture.start(device_name.as_deref(), producer) {
                 init_tx.send(Err(e)).ok();
                 return;
             }
@@ -88,25 +94,25 @@ impl AudioPipeline {
             let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
             let mut vad = VoiceActivityDetector::new(vad_threshold);
 
+            let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
             while running.load(Ordering::SeqCst) {
-                match audio_rx.recv_timeout(std::time::Duration::from_millis(100)) {
-                    Ok(samples) => {
-                        let mono = to_mono(&samples, device_channels);
-                        let resampled = resample(&mono, device_rate, 16000);
-                        buffer.write(&resampled);
+                let n = consumer.pop_slice(&mut read_buf);
+                if n > 0 {
+                    let mono = to_mono(&read_buf[..n], device_channels);
+                    let resampled = resample(&mono, device_rate, 16000);
+                    buffer.write(&resampled);
 
-                        if buffer.has_chunk() {
-                            if let Some(chunk) = buffer.extract_chunk() {
-                                if vad.contains_speech(&chunk) {
-                                    if chunk_tx.send(chunk).is_err() {
-                                        break; // Receiver dropped
-                                    }
+                    if buffer.has_chunk() {
+                        if let Some(chunk) = buffer.extract_chunk() {
+                            if vad.contains_speech(&chunk) {
+                                if chunk_tx.send(chunk).is_err() {
+                                    break; // Receiver dropped
                                 }
                             }
                         }
                     }
-                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
-                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             }
         });

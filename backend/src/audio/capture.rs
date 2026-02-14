@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Stream, StreamConfig};
-use std::sync::mpsc;
+use ringbuf::traits::Producer;
 
 pub struct AudioCapture {
     stream: Option<Stream>,
@@ -31,7 +31,7 @@ impl AudioCapture {
     pub fn start(
         &mut self,
         device_name: Option<&str>,
-        sender: mpsc::Sender<Vec<f32>>,
+        mut producer: ringbuf::HeapProd<f32>,
     ) -> Result<(), String> {
         let host = cpal::default_host();
 
@@ -61,7 +61,7 @@ impl AudioCapture {
             .build_input_stream(
                 &config,
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    sender.send(data.to_vec()).ok();
+                    producer.push_slice(data);
                 },
                 |err| eprintln!("[audio] Stream error: {}", err),
                 None,
@@ -75,5 +75,4 @@ impl AudioCapture {
         self.stream = Some(stream);
         Ok(())
     }
-
 }
