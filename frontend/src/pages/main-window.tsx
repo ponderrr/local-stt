@@ -10,7 +10,7 @@ import { useConfig } from "@/hooks/use-config";
 
 export function MainWindow() {
   const [showSettings, setShowSettings] = useState(false);
-  const { status, toggle: _toggle, error } = useDictation();
+  const { status, error } = useDictation();
   const { transcript, clear } = useTranscription();
   const { models, activeModel, loadModel, loading } = useModels();
   const { config } = useConfig();
