@@ -46,7 +46,10 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                 match engine.transcribe(&chunk, &language) {
                     Ok(segments) => {
                         for segment in &segments {
-                            output::output_text(&segment.text, &output_mode).ok();
+                            if let Err(e) = output::output_text(&segment.text, &output_mode) {
+                                eprintln!("Output error: {}", e);
+                                app_clone.emit("output-error", format!("Failed to output text: {}", e)).ok();
+                            }
                             app_clone
                                 .emit(
                                     "transcription-update",

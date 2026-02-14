@@ -67,4 +67,6 @@ export const events = {
     listen<string>("dictation-status", (event) => handler(event.payload)),
   onDownloadProgress: (handler: (data: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("download-progress", (event) => handler(event.payload)),
+  onOutputError: (handler: (message: string) => void): Promise<UnlistenFn> =>
+    listen<string>("output-error", (event) => handler(event.payload)),
 };

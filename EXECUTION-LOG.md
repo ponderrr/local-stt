@@ -13,3 +13,12 @@ Started: 2026-02-14
 
 ---
 
+## Phase 2: Surface output_text errors to frontend
+**Status:** PASS
+**Changes:** `backend/src/commands/dictation.rs`, `frontend/src/lib/tauri.ts`, `frontend/src/hooks/use-dictation.ts`, `frontend/src/pages/main-window.tsx`
+**Verification Output:** `cargo check` — zero errors. `npm run build` — zero errors, built in 430ms
+**Timestamp:** 2026-02-14
+**Notes:** Added `output-error` event emission in Rust, event listener in tauri.ts, error state + timeout in use-dictation hook, error banner in main-window. Had to pass `undefined` to `useRef()` for React 19 type compat.
+
+---
+

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { commands, events } from "@/lib/tauri";
 
 type DictationStatus = "idle" | "listening" | "loading" | "error";
@@ -6,6 +6,8 @@ type DictationStatus = "idle" | "listening" | "loading" | "error";
 export function useDictation() {
   const [isListening, setIsListening] = useState(false);
   const [status, setStatus] = useState<DictationStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     const unlisten = events.onDictationStatus((newStatus) => {
@@ -15,6 +17,18 @@ export function useDictation() {
 
     return () => {
       unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = events.onOutputError((msg) => {
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      setError(msg);
+      errorTimeoutRef.current = setTimeout(() => setError(null), 5000);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
 
@@ -28,5 +42,5 @@ export function useDictation() {
     }
   }, []);
 
-  return { isListening, status, toggle };
+  return { isListening, status, toggle, error };
 }
