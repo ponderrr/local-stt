@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { commands, type Config } from "@/lib/tauri";
+import { useCallback, useEffect, useState } from 'react';
+import { commands, type Config } from '@/lib/tauri';
 
 export function useConfig() {
   const [config, setConfig] = useState<Config | null>(null);
@@ -13,7 +13,7 @@ export function useConfig() {
       await commands.updateConfig(newConfig);
       setConfig(newConfig);
     } catch (err) {
-      console.error("Failed to update config:", err);
+      console.error('Failed to update config:', err);
     }
   }, []);
 

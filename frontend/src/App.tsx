@@ -1,7 +1,7 @@
-import { Component, useEffect, useState, type ReactNode } from "react";
-import { MainWindow } from "./pages/main-window";
-import { SetupWizard } from "./components/setup-wizard";
-import { commands, type Config } from "./lib/tauri";
+import { Component, useEffect, useState, type ReactNode } from 'react';
+import { MainWindow } from './pages/main-window';
+import { SetupWizard } from './components/setup-wizard';
+import { commands, type Config } from './lib/tauri';
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -9,7 +9,7 @@ class ErrorBoundary extends Component<
 > {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: "" };
+    this.state = { hasError: false, error: '' };
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -21,12 +21,8 @@ class ErrorBoundary extends Component<
       return (
         <div className="h-screen bg-[#0f0f11] flex items-center justify-center p-6">
           <div className="bg-[#131316] border border-white/[0.08] rounded-lg p-8 text-center max-w-md">
-            <h2 className="text-lg font-semibold text-foreground mb-2">
-              Something went wrong
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              {this.state.error}
-            </p>
+            <h2 className="text-lg font-semibold text-foreground mb-2">Something went wrong</h2>
+            <p className="text-sm text-muted-foreground mb-4">{this.state.error}</p>
             <button
               onClick={() => window.location.reload()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm"

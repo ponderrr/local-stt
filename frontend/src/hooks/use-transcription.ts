@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
-import { events } from "@/lib/tauri";
+import { useCallback, useEffect, useState } from 'react';
+import { events } from '@/lib/tauri';
 
 export function useTranscription() {
-  const [transcript, setTranscript] = useState("");
+  const [transcript, setTranscript] = useState('');
 
   useEffect(() => {
     const unlisten = events.onTranscription((data) => {
       setTranscript((prev) => {
-        const separator = prev && !prev.endsWith(" ") ? " " : "";
+        const separator = prev && !prev.endsWith(' ') ? ' ' : '';
         return prev + separator + data.text;
       });
     });
@@ -18,7 +18,7 @@ export function useTranscription() {
   }, []);
 
   const clear = useCallback(() => {
-    setTranscript("");
+    setTranscript('');
   }, []);
 
   return { transcript, clear };

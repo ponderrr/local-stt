@@ -1,3 +1,7 @@
+//! RMS energy-based voice activity detector with hysteresis.
+//! Requires consecutive frames above threshold to trigger (onset=3) and
+//! consecutive frames below to release (offset=10), preventing flicker.
+
 pub struct VoiceActivityDetector {
     threshold: f32,
     min_speech_frames: usize,

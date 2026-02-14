@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { commands, events } from "@/lib/tauri";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { commands, events } from '@/lib/tauri';
 
-type DictationStatus = "idle" | "listening" | "loading" | "error";
+type DictationStatus = 'idle' | 'listening' | 'loading' | 'error';
 
 export function useDictation() {
-  const [status, setStatus] = useState<DictationStatus>("idle");
+  const [status, setStatus] = useState<DictationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -45,8 +45,8 @@ export function useDictation() {
     try {
       await commands.toggleDictation();
     } catch (err) {
-      console.error("Failed to toggle dictation:", err);
-      setStatus("error");
+      console.error('Failed to toggle dictation:', err);
+      setStatus('error');
     }
   }, []);
 

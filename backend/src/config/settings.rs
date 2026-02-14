@@ -1,3 +1,6 @@
+//! Application configuration: serialization, default values, and persistence
+//! to `~/.whispertype/config.json`.
+
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;

@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { TranscriptDisplay } from "@/components/transcript-display";
-import { ModelSelector } from "@/components/model-selector";
-import { StatusIndicator } from "@/components/status-indicator";
-import { SettingsPanel } from "@/components/settings-panel";
-import { useDictation } from "@/hooks/use-dictation";
-import { useTranscription } from "@/hooks/use-transcription";
-import { useModels } from "@/hooks/use-models";
-import { useConfig } from "@/hooks/use-config";
+import { useEffect, useState } from 'react';
+import { TranscriptDisplay } from '@/components/transcript-display';
+import { ModelSelector } from '@/components/model-selector';
+import { StatusIndicator } from '@/components/status-indicator';
+import { SettingsPanel } from '@/components/settings-panel';
+import { useDictation } from '@/hooks/use-dictation';
+import { useTranscription } from '@/hooks/use-transcription';
+import { useModels } from '@/hooks/use-models';
+import { useConfig } from '@/hooks/use-config';
 
 export function MainWindow() {
   const [showSettings, setShowSettings] = useState(false);
@@ -18,9 +18,7 @@ export function MainWindow() {
   useEffect(() => {
     if (loading || !config || activeModel) return;
     const defaultModel = config.default_model;
-    const isDownloaded = models.find(
-      (m) => m.id === defaultModel && m.downloaded
-    );
+    const isDownloaded = models.find((m) => m.id === defaultModel && m.downloaded);
     if (isDownloaded) {
       loadModel(defaultModel);
     }
@@ -62,11 +60,7 @@ export function MainWindow() {
 
       {/* Model Selector */}
       <div className="mb-4">
-        <ModelSelector
-          models={models}
-          activeModel={activeModel}
-          onSelect={loadModel}
-        />
+        <ModelSelector models={models} activeModel={activeModel} onSelect={loadModel} />
       </div>
 
       {/* Transcript Display */}
@@ -76,7 +70,7 @@ export function MainWindow() {
 
       {/* Status + Actions */}
       <div className="flex items-center justify-between">
-        <StatusIndicator status={status} hotkey={config?.hotkey ?? "Ctrl+Shift+Space"} />
+        <StatusIndicator status={status} hotkey={config?.hotkey ?? 'Ctrl+Shift+Space'} />
         {error && (
           <div className="mt-2 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded px-3 py-2">
             {error}
@@ -104,9 +98,7 @@ export function MainWindow() {
       </div>
 
       {/* Settings Panel (overlay) */}
-      {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      )}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

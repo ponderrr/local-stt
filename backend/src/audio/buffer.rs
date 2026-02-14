@@ -1,3 +1,6 @@
+//! Fixed-size ring buffer for accumulating 16kHz mono audio. Chunks are extracted
+//! with configurable overlap to provide context across transcription boundaries.
+
 pub struct AudioRingBuffer {
     data: Vec<f32>,
     write_pos: usize,

@@ -1,3 +1,6 @@
+//! Audio capture pipeline: microphone input via cpal, ring buffer staging,
+//! format conversion (mono + resample to 16kHz), VAD filtering, and chunk dispatch.
+
 pub mod buffer;
 pub mod capture;
 pub mod vad;
@@ -253,6 +256,12 @@ pub struct AudioPipeline {
     is_running: Arc<AtomicBool>,
 }
 
+impl Default for AudioPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioPipeline {
     pub fn new() -> Self {
         Self {
@@ -309,10 +318,8 @@ impl AudioPipeline {
 
                     if buffer.has_chunk() {
                         if let Some(chunk) = buffer.extract_chunk() {
-                            if vad.contains_speech(&chunk) {
-                                if chunk_tx.send(chunk).is_err() {
-                                    break; // Receiver dropped
-                                }
+                            if vad.contains_speech(&chunk) && chunk_tx.send(chunk).is_err() {
+                                break; // Receiver dropped
                             }
                         }
                     }

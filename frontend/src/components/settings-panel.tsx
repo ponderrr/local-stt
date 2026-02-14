@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useConfig } from "@/hooks/use-config";
-import { commands, type Config } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { useConfig } from '@/hooks/use-config';
+import { commands, type Config } from '@/lib/tauri';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -40,13 +40,25 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           <select
             value={localConfig.output_mode}
             onChange={(e) =>
-              setLocalConfig({ ...localConfig, output_mode: e.target.value as Config["output_mode"] })
+              setLocalConfig({
+                ...localConfig,
+                output_mode: e.target.value as Config['output_mode'],
+              })
             }
             className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground outline-none"
           >
-            <option value="both" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Type + Clipboard</option>
-            <option value="type_into_field" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Type into Field</option>
-            <option value="clipboard" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Clipboard Only</option>
+            <option value="both" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Type + Clipboard
+            </option>
+            <option
+              value="type_into_field"
+              style={{ backgroundColor: '#18181b', color: '#fafafa' }}
+            >
+              Type into Field
+            </option>
+            <option value="clipboard" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Clipboard Only
+            </option>
           </select>
         </div>
 
@@ -56,7 +68,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             Microphone
           </label>
           <select
-            value={localConfig.audio_device ?? ""}
+            value={localConfig.audio_device ?? ''}
             onChange={(e) =>
               setLocalConfig({
                 ...localConfig,
@@ -65,9 +77,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             }
             className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground outline-none"
           >
-            <option value="" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>System Default</option>
+            <option value="" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              System Default
+            </option>
             {audioDevices.map((device) => (
-              <option key={device} value={device} style={{ backgroundColor: "#18181b", color: "#fafafa" }}>
+              <option
+                key={device}
+                value={device}
+                style={{ backgroundColor: '#18181b', color: '#fafafa' }}
+              >
                 {device}
               </option>
             ))}
@@ -81,18 +99,30 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </label>
           <select
             value={localConfig.language}
-            onChange={(e) =>
-              setLocalConfig({ ...localConfig, language: e.target.value })
-            }
+            onChange={(e) => setLocalConfig({ ...localConfig, language: e.target.value })}
             className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground outline-none"
           >
-            <option value="auto" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Auto Detect</option>
-            <option value="en" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>English</option>
-            <option value="es" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Spanish</option>
-            <option value="fr" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>French</option>
-            <option value="de" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>German</option>
-            <option value="ja" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Japanese</option>
-            <option value="zh" style={{ backgroundColor: "#18181b", color: "#fafafa" }}>Chinese</option>
+            <option value="auto" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Auto Detect
+            </option>
+            <option value="en" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              English
+            </option>
+            <option value="es" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Spanish
+            </option>
+            <option value="fr" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              French
+            </option>
+            <option value="de" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              German
+            </option>
+            <option value="ja" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Japanese
+            </option>
+            <option value="zh" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Chinese
+            </option>
           </select>
         </div>
 

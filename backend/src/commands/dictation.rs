@@ -1,3 +1,6 @@
+//! Core dictation commands: toggle, start, and stop. Manages the audio pipeline
+//! and transcription thread lifecycle via shared AppState.
+
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 

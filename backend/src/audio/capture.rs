@@ -1,3 +1,6 @@
+//! Microphone capture via cpal. Pushes raw f32 samples into a lock-free ring buffer
+//! at the device's native sample rate and channel count.
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Stream, StreamConfig};
 use ringbuf::traits::Producer;
@@ -6,6 +9,12 @@ pub struct AudioCapture {
     stream: Option<Stream>,
     pub device_sample_rate: u32,
     pub device_channels: u16,
+}
+
+impl Default for AudioCapture {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AudioCapture {

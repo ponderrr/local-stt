@@ -1,19 +1,19 @@
-import { useState } from "react";
-import { StepGpu } from "./step-gpu";
-import { StepModels } from "./step-models";
-import { StepDownload } from "./step-download";
-import { StepComplete } from "./step-complete";
+import { useState } from 'react';
+import { StepGpu } from './step-gpu';
+import { StepModels } from './step-models';
+import { StepDownload } from './step-download';
+import { StepComplete } from './step-complete';
 
 interface SetupWizardProps {
   onComplete: () => void;
 }
 
-const STEPS = ["gpu", "models", "download", "complete"] as const;
+const STEPS = ['gpu', 'models', 'download', 'complete'] as const;
 type Step = (typeof STEPS)[number];
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
-  const [step, setStep] = useState<Step>("gpu");
-  const [selectedModels, setSelectedModels] = useState<string[]>(["large-v3"]);
+  const [step, setStep] = useState<Step>('gpu');
+  const [selectedModels, setSelectedModels] = useState<string[]>(['large-v3']);
 
   const next = () => {
     const idx = STEPS.indexOf(step);
@@ -31,24 +31,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             <div
               key={s}
               className={`h-1 w-12 rounded-full transition-colors ${
-                STEPS.indexOf(step) >= i ? "bg-primary" : "bg-white/[0.08]"
+                STEPS.indexOf(step) >= i ? 'bg-primary' : 'bg-white/[0.08]'
               }`}
             />
           ))}
         </div>
 
-        {step === "gpu" && <StepGpu onNext={next} />}
-        {step === "models" && (
-          <StepModels
-            selected={selectedModels}
-            onSelect={setSelectedModels}
-            onNext={next}
-          />
+        {step === 'gpu' && <StepGpu onNext={next} />}
+        {step === 'models' && (
+          <StepModels selected={selectedModels} onSelect={setSelectedModels} onNext={next} />
         )}
-        {step === "download" && (
-          <StepDownload models={selectedModels} onNext={next} />
-        )}
-        {step === "complete" && <StepComplete onFinish={onComplete} />}
+        {step === 'download' && <StepDownload models={selectedModels} onNext={next} />}
+        {step === 'complete' && <StepComplete onFinish={onComplete} />}
       </div>
     </div>
   );

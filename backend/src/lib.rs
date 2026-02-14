@@ -1,3 +1,5 @@
+//! WhisperType — local AI-powered speech-to-text desktop app built on Tauri v2.
+
 pub mod audio;
 pub mod commands;
 pub mod config;

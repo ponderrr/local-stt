@@ -1,3 +1,6 @@
+//! Whisper inference engine wrapping whisper-rs. Manages model loading/unloading
+//! and runs greedy transcription on 16kHz f32 audio chunks.
+
 use std::path::Path;
 use std::sync::Mutex;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -12,6 +15,12 @@ pub struct TranscriptionSegment {
     pub text: String,
     pub start: i64,
     pub end: i64,
+}
+
+impl Default for TranscriptionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TranscriptionEngine {

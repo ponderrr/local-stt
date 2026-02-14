@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { commands, events, type ModelInfo } from "@/lib/tauri";
+import { useCallback, useEffect, useState } from 'react';
+import { commands, events, type ModelInfo } from '@/lib/tauri';
 
 export function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -13,7 +13,7 @@ export function useModels() {
       const active = await commands.getActiveModel();
       setActiveModel(active);
     } catch (err) {
-      console.error("Failed to fetch models:", err);
+      console.error('Failed to fetch models:', err);
     } finally {
       setLoading(false);
     }
@@ -38,27 +38,33 @@ export function useModels() {
       await commands.loadModel(modelId);
       setActiveModel(modelId);
     } catch (err) {
-      console.error("Failed to load model:", err);
+      console.error('Failed to load model:', err);
     }
   }, []);
 
-  const downloadModel = useCallback(async (modelId: string) => {
-    try {
-      await commands.downloadModel(modelId);
-      await refresh();
-    } catch (err) {
-      console.error("Failed to download model:", err);
-    }
-  }, [refresh]);
+  const downloadModel = useCallback(
+    async (modelId: string) => {
+      try {
+        await commands.downloadModel(modelId);
+        await refresh();
+      } catch (err) {
+        console.error('Failed to download model:', err);
+      }
+    },
+    [refresh]
+  );
 
-  const deleteModel = useCallback(async (modelId: string) => {
-    try {
-      await commands.deleteModel(modelId);
-      await refresh();
-    } catch (err) {
-      console.error("Failed to delete model:", err);
-    }
-  }, [refresh]);
+  const deleteModel = useCallback(
+    async (modelId: string) => {
+      try {
+        await commands.deleteModel(modelId);
+        await refresh();
+      } catch (err) {
+        console.error('Failed to delete model:', err);
+      }
+    },
+    [refresh]
+  );
 
   return { models, activeModel, loadModel, downloadModel, deleteModel, refresh, loading };
 }

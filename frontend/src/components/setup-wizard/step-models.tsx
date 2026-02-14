@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { commands, type ModelInfo } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { commands, type ModelInfo } from '@/lib/tauri';
 
 interface StepModelsProps {
   selected: string[];
@@ -47,23 +47,19 @@ export function StepModels({ selected, onSelect, onNext }: StepModelsProps) {
             onClick={() => toggleModel(model.id)}
             className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
               selected.includes(model.id)
-                ? "border-primary/50 bg-primary/5"
-                : "border-white/[0.08] hover:bg-white/[0.03]"
+                ? 'border-primary/50 bg-primary/5'
+                : 'border-white/[0.08] hover:bg-white/[0.03]'
             }`}
           >
             <div className="text-left">
-              <p className="text-sm font-medium text-foreground">
-                {model.display_name}
-              </p>
+              <p className="text-sm font-medium text-foreground">{model.display_name}</p>
               <p className="text-xs text-muted-foreground">
                 ~{model.vram_mb.toLocaleString()} MB VRAM
               </p>
             </div>
             <div
               className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                selected.includes(model.id)
-                  ? "border-primary bg-primary"
-                  : "border-zinc-600"
+                selected.includes(model.id) ? 'border-primary bg-primary' : 'border-zinc-600'
               }`}
             >
               {selected.includes(model.id) && (
@@ -89,7 +85,7 @@ export function StepModels({ selected, onSelect, onNext }: StepModelsProps) {
         disabled={selected.length === 0}
         className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground px-6 py-2.5 rounded-md text-sm font-medium transition-colors"
       >
-        Download {selected.length} Model{selected.length !== 1 ? "s" : ""}
+        Download {selected.length} Model{selected.length !== 1 ? 's' : ''}
       </button>
     </div>
   );

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { commands, type GpuInfo } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { commands, type GpuInfo } from '@/lib/tauri';
 
 interface StepGpuProps {
   onNext: () => void;
@@ -19,9 +19,7 @@ export function StepGpu({ onNext }: StepGpuProps) {
 
   return (
     <div className="bg-[#131316] border border-white/[0.08] rounded-lg p-8 text-center space-y-6">
-      <h2 className="text-lg font-semibold text-foreground">
-        Welcome to WhisperType
-      </h2>
+      <h2 className="text-lg font-semibold text-foreground">Welcome to WhisperType</h2>
       <p className="text-sm text-muted-foreground">
         Local AI-powered speech-to-text. Everything runs on your machine.
       </p>

@@ -1,4 +1,4 @@
-import type { ModelInfo } from "@/lib/tauri";
+import type { ModelInfo } from '@/lib/tauri';
 
 interface ModelSelectorProps {
   models: ModelInfo[];
@@ -13,7 +13,7 @@ export function ModelSelector({ models, activeModel, onSelect }: ModelSelectorPr
         Model
       </label>
       <select
-        value={activeModel ?? ""}
+        value={activeModel ?? ''}
         onChange={(e) => onSelect(e.target.value)}
         className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2.5 text-sm text-foreground focus:ring-1 focus:ring-primary focus:border-primary outline-none appearance-none cursor-pointer text-center"
       >
@@ -21,13 +21,9 @@ export function ModelSelector({ models, activeModel, onSelect }: ModelSelectorPr
           Select a model...
         </option>
         {models.map((model) => (
-          <option
-            key={model.id}
-            value={model.id}
-            disabled={!model.downloaded}
-          >
+          <option key={model.id} value={model.id} disabled={!model.downloaded}>
             {model.display_name}
-            {!model.downloaded ? " (not downloaded)" : ""}
+            {!model.downloaded ? ' (not downloaded)' : ''}
           </option>
         ))}
       </select>

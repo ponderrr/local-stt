@@ -1,3 +1,6 @@
+//! Text output routing: dispatches transcribed text to keyboard simulation (enigo),
+//! system clipboard (arboard), or both, based on the user's configured output mode.
+
 pub mod clipboard;
 pub mod keyboard;
 

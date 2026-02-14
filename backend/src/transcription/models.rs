@@ -1,3 +1,6 @@
+//! Static registry of available Whisper GGML models (tiny through large-v3)
+//! with HuggingFace download URLs and size metadata.
+
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 

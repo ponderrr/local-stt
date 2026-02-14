@@ -8,9 +8,8 @@ export function StepComplete({ onFinish }: StepCompleteProps) {
       <div className="text-6xl">{'\u2714'}</div>
       <h2 className="text-lg font-semibold text-foreground">You're All Set</h2>
       <p className="text-sm text-muted-foreground">
-        Press <span className="font-mono text-foreground">Ctrl+Shift+Space</span> anywhere
-        to start dictating. WhisperType will transcribe your speech locally — nothing leaves
-        your machine.
+        Press <span className="font-mono text-foreground">Ctrl+Shift+Space</span> anywhere to start
+        dictating. WhisperType will transcribe your speech locally — nothing leaves your machine.
       </p>
       <button
         onClick={onFinish}

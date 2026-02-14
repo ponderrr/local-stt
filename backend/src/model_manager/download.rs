@@ -1,3 +1,6 @@
+//! Model lifecycle: async download with progress streaming, atomic file writes,
+//! deletion, and download-status queries.
+
 use crate::config::Config;
 use crate::transcription::models::get_model_registry;
 use futures_util::StreamExt;
