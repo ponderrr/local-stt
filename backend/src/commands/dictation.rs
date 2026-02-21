@@ -1,6 +1,7 @@
 //! Core dictation commands: toggle, start, and stop. Manages the audio pipeline
 //! and transcription thread lifecycle via shared AppState.
 
+use ringbuf::traits::Split;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
@@ -14,19 +15,32 @@ pub struct AppState {
     pub pipeline: AudioPipeline,
     pub config: Mutex<Config>,
     pub transcription_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    pub audio_handle: Mutex<Option<crate::audio::capture::AudioHandle>>,
 }
+
+// cpal::Stream is now Send/Sync by default in 0.17.
+// We store it directly.
 
 fn join_transcription_thread(state: &AppState) {
     let handle = state.transcription_thread.lock().unwrap().take();
     if let Some(h) = handle {
         h.join().ok();
     }
+    // Drop the audio stream to close it
+    let _ = state.audio_handle.lock().unwrap().take();
 }
 
 /// Core toggle logic, callable from both Tauri commands and the global hotkey handler.
 pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool, String> {
     if state.pipeline.is_running() {
         state.pipeline.stop();
+
+        if let Some(handle) = state.audio_handle.lock().unwrap().as_ref() {
+            let _ = handle
+                .cmd_tx
+                .send(crate::audio::capture::AudioCommand::Stop);
+        }
+
         join_transcription_thread(state);
         app.emit("dictation-status", "idle").ok();
         Ok(false)
@@ -38,12 +52,49 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         }
 
         let config = state.config.lock().map_err(|e| e.to_string())?;
-        let receiver = state.pipeline.start(
-            config.audio_device.clone(),
-            config.vad_threshold,
-            config.chunk_duration_ms,
-            config.overlap_ms,
-        )?;
+
+        let mut handle_lock = state.audio_handle.lock().unwrap();
+        let receiver_opt;
+
+        if handle_lock.is_none() {
+            let rb = ringbuf::HeapRb::<f32>::new(48000 * 2 * 3);
+            let (prod, cons) = rb.split();
+
+            let device_name = config.audio_device.clone();
+            let new_handle =
+                crate::audio::capture::AudioCapture::spawn_audio_actor(device_name, prod)?;
+
+            let device_rate = new_handle.sample_rate;
+            let device_channels = new_handle.channels;
+
+            *handle_lock = Some(new_handle);
+
+            receiver_opt = Some(state.pipeline.start(
+                Some(cons),
+                config.vad_threshold,
+                config.chunk_duration_ms,
+                config.overlap_ms,
+                device_rate,
+                device_channels,
+            )?);
+        } else {
+            let handle = handle_lock.as_ref().unwrap();
+            let _ = handle
+                .cmd_tx
+                .send(crate::audio::capture::AudioCommand::Start);
+
+            receiver_opt = Some(state.pipeline.start(
+                None, // Use cached consumer
+                config.vad_threshold,
+                config.chunk_duration_ms,
+                config.overlap_ms,
+                handle.sample_rate,
+                handle.channels,
+            )?);
+        }
+
+        let receiver = receiver_opt.unwrap();
+
         let language = config.language.clone();
         let output_mode = config.output_mode.clone();
         drop(config);
@@ -61,11 +112,11 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     Ok(segments) => {
                         for segment in &segments {
                             if let Err(e) = output::output_text(&segment.text, &output_mode) {
-                                eprintln!("Output error: {}", e);
                                 app_clone
                                     .emit("output-error", format!("Failed to output text: {}", e))
                                     .ok();
                             }
+
                             app_clone
                                 .emit(
                                     "transcription-update",
@@ -78,7 +129,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                         }
                     }
                     Err(e) => {
-                        eprintln!("Transcription error: {}", e);
                         app_clone
                             .emit(
                                 "transcription-error",
@@ -117,4 +167,56 @@ pub fn stop_dictation(state: State<'_, AppState>, app: AppHandle) -> Result<(), 
         app.emit("dictation-status", "idle").ok();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies that AppState can be safely initialized and that its internal Locks
+    /// do not immediately poison or panic.
+    #[test]
+    fn test_appstate_initialization_does_not_panic() {
+        let config = Config::default();
+        let engine = Arc::new(TranscriptionEngine::new());
+        let pipeline = AudioPipeline::new();
+
+        let state = AppState {
+            engine,
+            pipeline,
+            config: Mutex::new(config),
+            transcription_thread: Mutex::new(None),
+            audio_handle: Mutex::new(None),
+        };
+
+        assert!(
+            state.audio_handle.lock().unwrap().is_none(),
+            "Audio handle should start empty"
+        );
+        assert!(
+            state.transcription_thread.lock().unwrap().is_none(),
+            "Transcription thread should start empty"
+        );
+    }
+
+    /// Verifies that join_transcription_thread safely operates on an empty state without panicking.
+    #[test]
+    fn test_join_transcription_thread_empty_state_safety() {
+        let state = AppState {
+            engine: Arc::new(TranscriptionEngine::new()),
+            pipeline: AudioPipeline::new(),
+            config: Mutex::new(Config::default()),
+            transcription_thread: Mutex::new(None),
+            audio_handle: Mutex::new(None),
+        };
+
+        // Should not panic or block
+        join_transcription_thread(&state);
+
+        let handle_lock = state.audio_handle.lock().unwrap();
+        assert!(
+            handle_lock.is_none(),
+            "Audio handle must remain empty after join on empty state"
+        );
+    }
 }

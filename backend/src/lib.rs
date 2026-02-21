@@ -22,6 +22,7 @@ pub fn run() {
         pipeline: audio::AudioPipeline::new(),
         config: Mutex::new(config),
         transcription_thread: Mutex::new(None),
+        audio_handle: Mutex::new(None),
     };
 
     tauri::Builder::default()

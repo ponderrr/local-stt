@@ -4,10 +4,19 @@ version = "0.1.0"
 description = "Local AI-powered dictation desktop app"
 authors = ["ponderrr <robert.ponder@selu.edu>"]
 edition = "2021"
+default-run = "whispertype"
 
 [lib]
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "list_audio"
+path = "src/bin/list_audio.rs"
+
+[[bin]]
+name = "audio_diag"
+path = "src/bin/audio_diag.rs"
 
 [features]
 default = ["cuda"]
@@ -24,7 +33,7 @@ tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 whisper-rs = { version = "0.15" }
-cpal = "0.15"
+cpal = "0.17"
 enigo = { version = "0.6", features = ["x11rb", "wayland"] }
 arboard = "3"
 reqwest = { version = "0.12", features = ["stream", "json"] }

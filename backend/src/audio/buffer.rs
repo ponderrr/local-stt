@@ -1,6 +1,11 @@
 //! Fixed-size ring buffer for accumulating 16kHz mono audio. Chunks are extracted
 //! with configurable overlap to provide context across transcription boundaries.
 
+/// A ring buffer specifically designed for collecting continuous mono audio samples.
+///
+/// Accumulates incoming audio over time and extracts discrete overlapping "chunks"
+/// formatted for the STT engine. The overlap ensures context across chunk boundaries
+/// is preserved.
 pub struct AudioRingBuffer {
     data: Vec<f32>,
     write_pos: usize,

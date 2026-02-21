@@ -13,13 +13,13 @@ Built with **Tauri** (Rust) + **React** (TypeScript) + **whisper.cpp** (CUDA-acc
 - **Privacy-first** — 100% local, zero network after model download
 - **Dual output** — Type into active field + copy to clipboard
 
-## Requirements
+## Prerequisites
 
-- **OS:** Linux (developed on CachyOS/Arch)
+- **OS:** Linux (developed on CachyOS/Arch). Note: The audio capture pipeline is optimized for PipeWire on Linux.
 - **GPU:** NVIDIA GPU with CUDA support (recommended)
 - **CUDA Toolkit:** Required for GPU acceleration
 - **Node.js:** 18+
-- **Rust:** Latest stable
+- **Rust Toolchain:** Latest stable
 
 ## Installation
 
@@ -58,12 +58,13 @@ cargo tauri build
 5. Speak naturally — text appears in real-time
 6. Press **Ctrl+Shift+Space** again to stop
 
-## Architecture
+## Architecture Overview
 
-- **Backend:** Rust (Tauri) — audio capture, whisper-rs transcription, keyboard simulation
+- **Backend:** Rust (Tauri)
 - **Frontend:** React + TypeScript + Tailwind + shadcn/ui
 - **Transcription:** whisper.cpp via whisper-rs with CUDA acceleration
-- **Audio:** cpal for microphone capture, energy-based VAD
+- **Audio Pipeline:**
+  Microphone input is securely handled by an isolated, non-blocking **Audio Actor Thread** using `cpal`. Samples are pushed directly into a lock-free `ringbuf` heap. A dedicated **DSP Thread** pulls samples out, computes energy-based Voice Activity Detection (VAD), downsamples to mono 16kHz, and dispatches framed clean speech chunks over an asynchronous channel to the STT transcription engine. This prevents OS-level audio buffer underruns completely.
 
 ## License
 
