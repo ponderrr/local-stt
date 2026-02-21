@@ -22,7 +22,7 @@ impl VoiceActivityDetector {
     pub fn new(threshold: f32) -> Self {
         Self {
             threshold,
-            min_speech_frames: 3, // Require 3 consecutive voiced frames to trigger
+            min_speech_frames: 2, // Require 2 consecutive voiced frames to trigger
             min_silence_frames: 10, // Require 10 silent frames to end speech
             speech_frame_count: 0,
             silence_frame_count: 0,
@@ -190,8 +190,7 @@ mod tests {
         let mut vad = VoiceActivityDetector::new(0.01);
         // Simulate speech with higher energy
         let speech: Vec<f32> = (0..480).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
-        // Need min_speech_frames consecutive
-        vad.process_frame(&speech);
+        // Need min_speech_frames (2) consecutive
         vad.process_frame(&speech);
         assert!(vad.process_frame(&speech));
     }
@@ -206,13 +205,8 @@ mod tests {
             !vad.process_frame(&speech),
             "1 frame should not trigger speech"
         );
-        // Frame 2: not yet speech
-        assert!(
-            !vad.process_frame(&speech),
-            "2 frames should not trigger speech"
-        );
-        // Frame 3: now speech is detected (min_speech_frames = 3)
-        assert!(vad.process_frame(&speech), "3 frames should trigger speech");
+        // Frame 2: now speech is detected (min_speech_frames = 2)
+        assert!(vad.process_frame(&speech), "2 frames should trigger speech");
     }
 
     #[test]
@@ -221,7 +215,7 @@ mod tests {
         let speech: Vec<f32> = (0..480).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
 
         // Trigger speech
-        for _ in 0..3 {
+        for _ in 0..2 {
             vad.process_frame(&speech);
         }
         assert!(vad.is_speech);
@@ -240,7 +234,7 @@ mod tests {
         let silence = vec![0.0f32; 480];
 
         // Trigger speech
-        for _ in 0..3 {
+        for _ in 0..2 {
             vad.process_frame(&speech);
         }
         assert!(vad.is_speech);
@@ -266,7 +260,7 @@ mod tests {
         let silence = vec![0.0f32; 480];
 
         // Trigger speech
-        for _ in 0..3 {
+        for _ in 0..2 {
             vad.process_frame(&speech);
         }
 
@@ -331,8 +325,7 @@ mod tests {
         let value = threshold + 0.001;
         let frame = vec![value; 480];
 
-        // Should trigger speech after min_speech_frames
-        vad.process_frame(&frame);
+        // Should trigger speech after min_speech_frames (2)
         vad.process_frame(&frame);
         assert!(
             vad.process_frame(&frame),

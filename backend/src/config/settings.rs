@@ -37,7 +37,7 @@ impl Default for Config {
             output_mode: OutputMode::Both,
             audio_device: None,
             language: "auto".to_string(),
-            vad_threshold: 0.01,
+            vad_threshold: 0.003,
             chunk_duration_ms: 3000,
             overlap_ms: 500,
             downloaded_models: Vec::new(),
@@ -131,7 +131,7 @@ mod tests {
         assert_eq!(config.output_mode, OutputMode::Both);
         assert!(config.audio_device.is_none());
         assert_eq!(config.language, "auto");
-        assert!((config.vad_threshold - 0.01).abs() < 1e-6);
+        assert!((config.vad_threshold - 0.003).abs() < 1e-6);
         assert_eq!(config.chunk_duration_ms, 3000);
         assert_eq!(config.overlap_ms, 500);
         assert!(config.downloaded_models.is_empty());

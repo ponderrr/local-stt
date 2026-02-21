@@ -1,5 +1,5 @@
 #![allow(clippy::items_after_test_module)]
-//! Audio capture pipeline: microphone input via cpal, ring buffer staging,
+//! Audio capture pipeline: microphone input via PulseAudio, ring buffer staging,
 //! format conversion (mono + resample to 16kHz), VAD filtering, and chunk dispatch.
 
 pub mod buffer;
@@ -332,24 +332,35 @@ impl AudioPipeline {
                 let mut vad = VoiceActivityDetector::new(vad_threshold);
 
                 let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
-                let mut last_log_time = std::time::Instant::now();
+                let mut last_dsp_log = std::time::Instant::now();
 
                 while running.load(Ordering::SeqCst) {
                     let n = consumer.pop_slice(&mut read_buf);
                     if n > 0 {
+                        if last_dsp_log.elapsed() > std::time::Duration::from_secs(2) {
+                            eprintln!("DIAG DSP: popped {} samples from ringbuf", n);
+                            last_dsp_log = std::time::Instant::now();
+                        }
                         let mono = to_mono(&read_buf[..n], device_channels);
                         let resampled = resample(&mono, device_rate, 16000);
 
                         buffer.write(&resampled);
 
-                        if last_log_time.elapsed() > std::time::Duration::from_secs(2) {
-                            last_log_time = std::time::Instant::now();
-                        }
-
                         if buffer.has_chunk() {
                             if let Some(chunk) = buffer.extract_chunk() {
+                                eprintln!(
+                                    "DIAG VAD: checking chunk, {} samples, rms={:.6}",
+                                    chunk.len(),
+                                    (chunk.iter().map(|x| x * x).sum::<f32>() / chunk.len() as f32).sqrt()
+                                );
                                 let has_speech = vad.contains_speech(&chunk);
-                                if has_speech && chunk_tx.send(chunk).is_err() {
+                                if has_speech {
+                                    eprintln!("DIAG VAD: SPEECH DETECTED, sending chunk");
+                                } else {
+                                    eprintln!("DIAG VAD: no speech (bypassed), sending chunk anyway");
+                                }
+                                // VAD bypassed: send every chunk to confirm end-to-end pipeline
+                                if chunk_tx.send(chunk).is_err() {
                                     break; // Receiver dropped
                                 }
                             }

@@ -18,9 +18,6 @@ pub struct AppState {
     pub audio_handle: Mutex<Option<crate::audio::capture::AudioHandle>>,
 }
 
-// cpal::Stream is now Send/Sync by default in 0.17.
-// We store it directly.
-
 fn join_transcription_thread(state: &AppState) {
     let handle = state.transcription_thread.lock().unwrap().take();
     if let Some(h) = handle {
@@ -54,10 +51,15 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let config = state.config.lock().map_err(|e| e.to_string())?;
 
         let mut handle_lock = state.audio_handle.lock().unwrap();
+
+        if handle_lock.is_some() {
+            return Ok(true);
+        }
+
         let receiver_opt;
 
         if handle_lock.is_none() {
-            let rb = ringbuf::HeapRb::<f32>::new(48000 * 2 * 3);
+            let rb = ringbuf::HeapRb::<f32>::new(48000 * 3);
             let (prod, cons) = rb.split();
 
             let device_name = config.audio_device.clone();
@@ -98,6 +100,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let language = config.language.clone();
         let output_mode = config.output_mode.clone();
         drop(config);
+        drop(handle_lock);
 
         app.emit("dictation-status", "listening").ok();
 
@@ -108,6 +111,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
 
         let handle = std::thread::spawn(move || {
             while let Ok(chunk) = receiver.recv() {
+                eprintln!("DIAG WHISPER: received chunk, {} samples, invoking transcribe", chunk.len());
                 match engine.transcribe(&chunk, &language) {
                     Ok(segments) => {
                         for segment in &segments {
