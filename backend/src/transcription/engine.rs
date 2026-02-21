@@ -103,6 +103,8 @@ impl TranscriptionEngine {
         params.set_suppress_nst(true);
         params.set_no_context(true);
 
+        // Start timer
+        let _start = std::time::Instant::now();
         state
             .full(params, audio_data)
             .map_err(|e| format!("Transcription failed: {}", e))?;
@@ -119,7 +121,7 @@ impl TranscriptionEngine {
                 .to_str()
                 .map_err(|e| format!("Failed to get segment text: {}", e))?;
 
-            let trimmed = text.trim().to_string();
+            let trimmed = text.trim();
             if trimmed.is_empty() {
                 continue;
             }
@@ -128,7 +130,7 @@ impl TranscriptionEngine {
             let end = segment.end_timestamp();
 
             segments.push(TranscriptionSegment {
-                text: trimmed,
+                text: trimmed.to_string(),
                 start,
                 end,
             });

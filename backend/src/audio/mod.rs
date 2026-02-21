@@ -1,3 +1,4 @@
+#![allow(clippy::items_after_test_module)]
 //! Audio capture pipeline: microphone input via cpal, ring buffer staging,
 //! format conversion (mono + resample to 16kHz), VAD filtering, and chunk dispatch.
 
@@ -6,9 +7,7 @@ pub mod capture;
 pub mod vad;
 
 use buffer::AudioRingBuffer;
-use capture::AudioCapture;
-use ringbuf::traits::{Consumer, Split};
-use ringbuf::HeapRb;
+use ringbuf::traits::Consumer;
 use std::sync::mpsc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -16,7 +15,8 @@ use std::sync::{
 };
 use vad::VoiceActivityDetector;
 
-/// Convert interleaved multi-channel audio to mono by averaging channels.
+/// Converts an interleaved multi-channel audio slice into a mono signal
+/// by averaging the samples across all available channels in each frame.
 fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
     if channels == 1 {
         return samples.to_vec();
@@ -29,6 +29,8 @@ fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
 }
 
 /// Resample audio from src_rate to dst_rate using linear interpolation.
+/// Resamples the input audio slice from `input_rate` to `output_rate`
+/// using basic linear interpolation. Preserves valid amplitudes within [-1.0, 1.0].
 fn resample(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
     if src_rate == dst_rate {
         return input.to_vec();
@@ -243,17 +245,43 @@ mod tests {
         let result = resample(&input, 48000, 16000);
         for (i, &val) in result.iter().enumerate() {
             assert!(
-                val >= -1.0 - 1e-6 && val <= 1.0 + 1e-6,
+                (-1.0 - 1e-6..=1.0 + 1e-6).contains(&val),
                 "resampled sample {} = {} is out of [-1, 1] range",
                 i,
                 val
             );
         }
     }
+
+    // --- AudioPipeline Tests ---
+
+    /// Verifies that an AudioPipeline is instantiated with a stopped state.
+    #[test]
+    fn test_audiopipeline_initializes_stopped() {
+        let pipeline = AudioPipeline::new();
+        assert!(
+            !pipeline.is_running(),
+            "Pipeline should not be running after creation"
+        );
+    }
+
+    /// Verifies that calling stop() on a pipeline that hasn't started does not panic
+    /// and correctly leaves the pipeline in a stopped state.
+    #[test]
+    fn test_audiopipeline_stop_when_stopped_does_not_panic() {
+        let pipeline = AudioPipeline::new();
+        pipeline.stop(); // Should be a safe no-op
+        assert!(!pipeline.is_running());
+    }
 }
 
+/// The main coordinator pipeline that orchestrates the data flow between
+/// the lock-free audio ring buffer, the DSP processing thread, and the
+/// output chunk channel. Manages the lifecycle of the DSP thread.
 pub struct AudioPipeline {
     is_running: Arc<AtomicBool>,
+    thread_handle: std::sync::Mutex<Option<std::thread::JoinHandle<ringbuf::HeapCons<f32>>>>,
+    consumer: std::sync::Mutex<Option<ringbuf::HeapCons<f32>>>,
 }
 
 impl Default for AudioPipeline {
@@ -266,80 +294,88 @@ impl AudioPipeline {
     pub fn new() -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
+            thread_handle: std::sync::Mutex::new(None),
+            consumer: std::sync::Mutex::new(None),
         }
     }
 
     /// Start the audio pipeline. Returns a receiver that yields speech audio chunks.
     pub fn start(
         &self,
-        device_name: Option<String>,
+        new_consumer: Option<ringbuf::HeapCons<f32>>,
         vad_threshold: f32,
         chunk_duration_ms: u32,
         overlap_ms: u32,
+        device_rate: u32,
+        device_channels: u16,
     ) -> Result<mpsc::Receiver<Vec<f32>>, String> {
         let is_running = self.is_running.clone();
         is_running.store(true, Ordering::SeqCst);
 
-        let (chunk_tx, chunk_rx) = mpsc::channel::<Vec<f32>>();
-        let (init_tx, init_rx) = mpsc::channel::<Result<(), String>>();
+        let mut cons = None;
+        if let Some(c) = new_consumer {
+            cons = Some(c);
+        } else if let Some(c) = self.consumer.lock().unwrap().take() {
+            cons = Some(c);
+        }
 
-        // Spawn processing thread
+        let mut consumer =
+            cons.ok_or_else(|| "No consumer available for AudioPipeline".to_string())?;
+
+        let (chunk_tx, chunk_rx) = mpsc::channel::<Vec<f32>>();
         let running = is_running.clone();
 
-        std::thread::spawn(move || {
-            // 3 seconds of audio at 48kHz stereo (conservative capacity)
-            let rb_capacity = 48000 * 2 * 3;
-            let rb = HeapRb::<f32>::new(rb_capacity);
-            let (producer, mut consumer) = rb.split();
+        let handle = std::thread::Builder::new()
+            .name("dsp-pipeline".into())
+            .spawn(move || {
+                let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
+                let mut vad = VoiceActivityDetector::new(vad_threshold);
 
-            let mut capture = AudioCapture::new();
+                let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
+                let mut last_log_time = std::time::Instant::now();
 
-            // Try to start capture
-            if let Err(e) = capture.start(device_name.as_deref(), producer) {
-                init_tx.send(Err(e)).ok();
-                return;
-            }
-            // Signal success
-            init_tx.send(Ok(())).ok();
+                while running.load(Ordering::SeqCst) {
+                    let n = consumer.pop_slice(&mut read_buf);
+                    if n > 0 {
+                        let mono = to_mono(&read_buf[..n], device_channels);
+                        let resampled = resample(&mono, device_rate, 16000);
 
-            let device_rate = capture.device_sample_rate;
-            let device_channels = capture.device_channels;
+                        buffer.write(&resampled);
 
-            let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
-            let mut vad = VoiceActivityDetector::new(vad_threshold);
+                        if last_log_time.elapsed() > std::time::Duration::from_secs(2) {
+                            last_log_time = std::time::Instant::now();
+                        }
 
-            let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
-            while running.load(Ordering::SeqCst) {
-                let n = consumer.pop_slice(&mut read_buf);
-                if n > 0 {
-                    let mono = to_mono(&read_buf[..n], device_channels);
-                    let resampled = resample(&mono, device_rate, 16000);
-                    buffer.write(&resampled);
-
-                    if buffer.has_chunk() {
-                        if let Some(chunk) = buffer.extract_chunk() {
-                            if vad.contains_speech(&chunk) && chunk_tx.send(chunk).is_err() {
-                                break; // Receiver dropped
+                        if buffer.has_chunk() {
+                            if let Some(chunk) = buffer.extract_chunk() {
+                                let has_speech = vad.contains_speech(&chunk);
+                                if has_speech && chunk_tx.send(chunk).is_err() {
+                                    break; // Receiver dropped
+                                }
                             }
                         }
+                    } else {
+                        // Empty buffer: sleep briefly
+                        std::thread::sleep(std::time::Duration::from_millis(10));
                     }
-                } else {
-                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-            }
-        });
 
-        // Wait for initialization result from the thread
-        match init_rx.recv() {
-            Ok(result) => result.map(|_| chunk_rx),
-            Err(_) => {
-                Err("Failed to initialize audio thread (channel closed unexpectedly)".to_string())
-            }
-        }
+                consumer
+            })
+            .map_err(|e| format!("Failed to spawn DSP thread: {}", e))?;
+
+        *self.thread_handle.lock().unwrap() = Some(handle);
+
+        Ok(chunk_rx)
     }
 
     pub fn stop(&self) {
         self.is_running.store(false, Ordering::SeqCst);
+        if let Some(handle) = self.thread_handle.lock().unwrap().take() {
+            if let Ok(cons) = handle.join() {
+                *self.consumer.lock().unwrap() = Some(cons);
+            }
+        }
     }
 
     pub fn is_running(&self) -> bool {

@@ -2,6 +2,13 @@
 //! Requires consecutive frames above threshold to trigger (onset=3) and
 //! consecutive frames below to release (offset=10), preventing flicker.
 
+/// Energy-based Voice Activity Detector (VAD).
+///
+/// Analyzes audio frames and determines the presence of speech based on RMS energy
+/// exceeding a defined threshold. Implements hysteresis mapping: triggering requires
+/// multiple consecutive high-energy frames (preventing false positives from clicks),
+/// and releasing requires multiple consecutive low-energy frames (preventing stutter
+/// within natural speech pauses).
 pub struct VoiceActivityDetector {
     threshold: f32,
     min_speech_frames: usize,

@@ -48,6 +48,7 @@ impl Default for Config {
 
 impl Config {
     pub fn app_dir() -> PathBuf {
+        // SAFETY: The OS is expected to have a home directory. Standard desktop env.
         dirs::home_dir()
             .expect("Could not find home directory")
             .join(".whispertype")
