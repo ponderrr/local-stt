@@ -73,14 +73,14 @@ impl AudioCapture {
                 let source_ref = source.as_deref();
 
                 let simple = match psimple::Simple::new(
-                    None,                // Default server
-                    "WhisperType",       // Application name
+                    None,          // Default server
+                    "WhisperType", // Application name
                     Direction::Record,
                     source_ref,          // Source device (None = default)
                     "dictation-capture", // Stream description
                     &spec,
-                    None,                // Default channel map
-                    None,                // Default buffering attributes
+                    None, // Default channel map
+                    None, // Default buffering attributes
                 ) {
                     Ok(s) => s,
                     Err(e) => {

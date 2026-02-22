@@ -61,10 +61,9 @@ impl TranscriptionEngine {
                     let mut fallback_params = WhisperContextParameters::default();
                     fallback_params.use_gpu(true);
 
-                    let ctx = WhisperContext::new_with_params(path_str, fallback_params)
-                        .map_err(|e| {
-                            format!("Failed to load whisper model '{}': {}", model_id, e)
-                        })?;
+                    let ctx = WhisperContext::new_with_params(path_str, fallback_params).map_err(
+                        |e| format!("Failed to load whisper model '{}': {}", model_id, e),
+                    )?;
                     eprintln!("whisper: context created with flash_attn=false (fallback)");
                     ctx
                 }

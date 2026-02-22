@@ -66,8 +66,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let (prod, cons) = rb.split();
 
         let device_name = config.audio_device.clone();
-        let new_handle =
-            crate::audio::capture::AudioCapture::spawn_audio_actor(device_name, prod)?;
+        let new_handle = crate::audio::capture::AudioCapture::spawn_audio_actor(device_name, prod)?;
 
         let device_rate = new_handle.sample_rate;
         let device_channels = new_handle.channels;
