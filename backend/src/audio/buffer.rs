@@ -102,6 +102,20 @@ mod tests {
     }
 
     #[test]
+    fn test_default_chunk_duration_produces_correct_size() {
+        // Validates the app default: 2000ms chunk at 16kHz = 32000 samples
+        let buf = AudioRingBuffer::new(16000, 2000, 500, 30);
+        assert_eq!(
+            buf.chunk_size, 32000,
+            "2000ms chunk at 16kHz should be 32000 samples"
+        );
+        assert_eq!(
+            buf.overlap_size, 8000,
+            "500ms overlap at 16kHz should be 8000 samples"
+        );
+    }
+
+    #[test]
     fn test_new_buffer_data_initialized_to_zero() {
         let buf = AudioRingBuffer::new(16000, 3000, 500, 30);
         assert!(

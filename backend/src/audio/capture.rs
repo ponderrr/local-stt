@@ -27,8 +27,7 @@ pub struct AudioHandle {
 pub struct AudioCapture;
 
 impl AudioCapture {
-    /// Discovers and returns a list of viable input device names using cpal.
-    /// cpal is retained solely for enumeration; capture uses PulseAudio.
+    /// Discovers and returns a list of viable input device names.
     #[allow(deprecated)]
     pub fn list_devices() -> Result<Vec<String>, String> {
         use cpal::traits::{DeviceTrait, HostTrait};
@@ -62,7 +61,7 @@ impl AudioCapture {
         std::thread::Builder::new()
             .name("pulse-actor".into())
             .spawn(move || {
-                eprintln!("DIAG PULSE: connecting to PipeWire via pipewire-pulse...");
+                eprintln!("pulse: connecting to PipeWire via pipewire-pulse...");
 
                 let spec = Spec {
                     format: Format::FLOAT32NE,
@@ -85,17 +84,16 @@ impl AudioCapture {
                 ) {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!("DIAG PULSE: connection FAILED: {}", e);
+                        eprintln!("pulse: connection FAILED: {}", e);
                         return;
                     }
                 };
 
-                eprintln!("DIAG PULSE: connection established, starting capture loop");
+                eprintln!("pulse: connection established, starting capture loop");
 
                 // 10ms of mono f32 at 48kHz = 480 samples = 1920 bytes
                 let mut byte_buf = vec![0u8; 480 * std::mem::size_of::<f32>()];
                 let mut active = true;
-                let mut last_diag = std::time::Instant::now();
 
                 loop {
                     // Check for commands (non-blocking)
@@ -109,7 +107,7 @@ impl AudioCapture {
 
                     // Blocking read from PulseAudio — fills exactly byte_buf.len() bytes
                     if let Err(e) = simple.read(&mut byte_buf) {
-                        eprintln!("DIAG PULSE: read error: {}", e);
+                        eprintln!("pulse: read error: {}", e);
                         break;
                     }
 
@@ -121,14 +119,6 @@ impl AudioCapture {
                                 byte_buf.len() / std::mem::size_of::<f32>(),
                             )
                         };
-
-                        if last_diag.elapsed() > std::time::Duration::from_secs(2) {
-                            eprintln!(
-                                "DIAG PULSE: read {} samples, pushing to ringbuf",
-                                samples.len()
-                            );
-                            last_diag = std::time::Instant::now();
-                        }
 
                         producer.push_slice(samples);
                     }
@@ -147,7 +137,6 @@ impl AudioCapture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ringbuf::traits::Split;
 
     /// Verifies that list_devices runs without panicking and returns a sensible Result.
     #[test]

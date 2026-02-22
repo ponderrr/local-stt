@@ -10,7 +10,6 @@ use whisper_rs::{
 pub struct TranscriptionEngine {
     ctx: Mutex<Option<WhisperContext>>,
     active_model: Mutex<Option<String>>,
-    flash_attn_enabled: Mutex<bool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -31,7 +30,6 @@ impl TranscriptionEngine {
         Self {
             ctx: Mutex::new(None),
             active_model: Mutex::new(None),
-            flash_attn_enabled: Mutex::new(false),
         }
     }
 
@@ -44,20 +42,20 @@ impl TranscriptionEngine {
 
         let path_str = model_path.to_str().ok_or("Invalid model path")?;
 
-        // Phase B: Try with flash attention enabled first, fall back if it fails
-        let (new_ctx, flash_enabled) = {
+        // Try with flash attention enabled first, fall back if it fails
+        let new_ctx = {
             let mut params = WhisperContextParameters::default();
             params.use_gpu(true);
-            params.use_flash_attn(true);
+            params.flash_attn(true);
 
             match WhisperContext::new_with_params(path_str, params) {
                 Ok(ctx) => {
-                    eprintln!("DIAG WHISPER: context created, flash_attn=true");
-                    (ctx, true)
+                    eprintln!("whisper: context created with flash_attn=true");
+                    ctx
                 }
                 Err(e) => {
                     eprintln!(
-                        "DIAG WHISPER: flash_attn failed ({}), falling back to non-flash",
+                        "whisper: flash_attn failed ({}), falling back to non-flash",
                         e
                     );
                     let mut fallback_params = WhisperContextParameters::default();
@@ -67,8 +65,8 @@ impl TranscriptionEngine {
                         .map_err(|e| {
                             format!("Failed to load whisper model '{}': {}", model_id, e)
                         })?;
-                    eprintln!("DIAG WHISPER: context created, flash_attn=false (fallback)");
-                    (ctx, false)
+                    eprintln!("whisper: context created with flash_attn=false (fallback)");
+                    ctx
                 }
             }
         };
@@ -81,11 +79,6 @@ impl TranscriptionEngine {
             let mut active = self.active_model.lock().map_err(|e| e.to_string())?;
             *active = Some(model_id.to_string());
         }
-        {
-            let mut flash = self.flash_attn_enabled.lock().map_err(|e| e.to_string())?;
-            *flash = flash_enabled;
-        }
-
         Ok(())
     }
 
@@ -146,14 +139,17 @@ impl TranscriptionEngine {
         params.set_suppress_nst(true);
         params.set_no_context(true);
 
+        #[cfg(debug_assertions)]
         let start = std::time::Instant::now();
+
         state
             .full(params, audio_data)
             .map_err(|e| format!("Transcription failed: {}", e))?;
-        let elapsed = start.elapsed();
+
+        #[cfg(debug_assertions)]
         eprintln!(
             "PERF: whisper transcribe took {}ms ({} samples, {:.1}s audio)",
-            elapsed.as_millis(),
+            start.elapsed().as_millis(),
             audio_data.len(),
             audio_data.len() as f64 / 16000.0
         );

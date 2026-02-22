@@ -114,7 +114,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             // Reused across all chunks — eliminates per-chunk CUDA state init (~300-400ms).
             let mut whisper_state = match engine.create_inference_state() {
                 Ok(s) => {
-                    eprintln!("DIAG WHISPER: inference state created (once per session)");
+                    eprintln!("whisper: inference state created (once per session)");
                     s
                 }
                 Err(e) => {
@@ -130,7 +130,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             };
 
             while let Ok(chunk) = receiver.recv() {
-                eprintln!("DIAG WHISPER: received chunk, {} samples, invoking transcribe", chunk.len());
                 match engine.transcribe(&mut whisper_state, &chunk, &language) {
                     Ok(segments) => {
                         for segment in &segments {

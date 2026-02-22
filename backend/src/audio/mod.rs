@@ -332,17 +332,12 @@ impl AudioPipeline {
                 let mut vad = VoiceActivityDetector::new(vad_threshold);
 
                 let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
-                let mut last_dsp_log = std::time::Instant::now();
                 let mut consecutive_speech: u32 = 0;
                 let mut consecutive_silent: u32 = 0;
 
                 while running.load(Ordering::SeqCst) {
                     let n = consumer.pop_slice(&mut read_buf);
                     if n > 0 {
-                        if last_dsp_log.elapsed() > std::time::Duration::from_secs(2) {
-                            eprintln!("DIAG DSP: popped {} samples from ringbuf", n);
-                            last_dsp_log = std::time::Instant::now();
-                        }
                         let mono = to_mono(&read_buf[..n], device_channels);
                         let resampled = resample(&mono, device_rate, 16000);
 
@@ -350,22 +345,11 @@ impl AudioPipeline {
 
                         if buffer.has_chunk() {
                             if let Some(chunk) = buffer.extract_chunk() {
-                                let rms = (chunk.iter().map(|x| x * x).sum::<f32>()
-                                    / chunk.len() as f32)
-                                    .sqrt();
                                 let has_speech = vad.contains_speech(&chunk);
 
                                 if has_speech {
-                                    let prev_speech = consecutive_speech;
                                     consecutive_speech += 1;
                                     consecutive_silent = 0;
-                                    eprintln!(
-                                        "DIAG VAD: SPEECH DETECTED (rms={:.4}, streak={}), sending chunk",
-                                        rms, consecutive_speech
-                                    );
-                                    if prev_speech == 0 {
-                                        eprintln!("DIAG VAD: speech onset");
-                                    }
                                     if chunk_tx.send(chunk).is_err() {
                                         break;
                                     }
@@ -374,21 +358,11 @@ impl AudioPipeline {
                                     let had_recent_speech = consecutive_speech >= 2;
                                     consecutive_speech = 0;
 
-                                    if had_recent_speech && consecutive_silent <= 1 {
-                                        // Grace: send one trailing chunk to capture final words
-                                        eprintln!(
-                                            "DIAG VAD: silence grace (rms={:.4}, trailing), sending chunk",
-                                            rms
-                                        );
-                                        if chunk_tx.send(chunk).is_err() {
-                                            break;
-                                        }
-                                    } else {
-                                        // True silence — skip whisper, save GPU
-                                        eprintln!(
-                                            "VAD: silence skipped (rms={:.4}, silent={})",
-                                            rms, consecutive_silent
-                                        );
+                                    if had_recent_speech
+                                        && consecutive_silent <= 1
+                                        && chunk_tx.send(chunk).is_err()
+                                    {
+                                        break;
                                     }
                                 }
                             }
