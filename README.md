@@ -238,7 +238,7 @@ Configuration lives at `~/.whispertype/config.json`. Models are stored in `~/.wh
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for full details. Questions or ideas? Open a thread in [GitHub Discussions](https://github.com/ponderrr/local-stt/discussions).
 
 ```bash
 git clone https://github.com/ponderrr/local-stt.git
