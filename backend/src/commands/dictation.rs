@@ -59,7 +59,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let receiver_opt;
 
         if handle_lock.is_none() {
-            let rb = ringbuf::HeapRb::<f32>::new(48000 * 3);
+            let rb = ringbuf::HeapRb::<f32>::new(48000 * 5);
             let (prod, cons) = rb.split();
 
             let device_name = config.audio_device.clone();
@@ -110,9 +110,28 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let app_clone = app.clone();
 
         let handle = std::thread::spawn(move || {
+            // Phase A: Create WhisperState ONCE for this dictation session.
+            // Reused across all chunks — eliminates per-chunk CUDA state init (~300-400ms).
+            let mut whisper_state = match engine.create_inference_state() {
+                Ok(s) => {
+                    eprintln!("DIAG WHISPER: inference state created (once per session)");
+                    s
+                }
+                Err(e) => {
+                    app_clone
+                        .emit(
+                            "transcription-error",
+                            format!("Failed to create inference state: {}", e),
+                        )
+                        .ok();
+                    app_clone.emit("dictation-status", "idle").ok();
+                    return;
+                }
+            };
+
             while let Ok(chunk) = receiver.recv() {
                 eprintln!("DIAG WHISPER: received chunk, {} samples, invoking transcribe", chunk.len());
-                match engine.transcribe(&chunk, &language) {
+                match engine.transcribe(&mut whisper_state, &chunk, &language) {
                     Ok(segments) => {
                         for segment in &segments {
                             if let Err(e) = output::output_text(&segment.text, &output_mode) {
@@ -142,6 +161,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     }
                 }
             }
+            // whisper_state dropped here when thread exits, before join returns
             app_clone.emit("dictation-status", "idle").ok();
         });
         *state.transcription_thread.lock().unwrap() = Some(handle);

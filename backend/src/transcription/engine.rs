@@ -3,11 +3,14 @@
 
 use std::path::Path;
 use std::sync::Mutex;
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{
+    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
+};
 
 pub struct TranscriptionEngine {
     ctx: Mutex<Option<WhisperContext>>,
     active_model: Mutex<Option<String>>,
+    flash_attn_enabled: Mutex<bool>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -28,6 +31,7 @@ impl TranscriptionEngine {
         Self {
             ctx: Mutex::new(None),
             active_model: Mutex::new(None),
+            flash_attn_enabled: Mutex::new(false),
         }
     }
 
@@ -38,14 +42,36 @@ impl TranscriptionEngine {
             *ctx = None;
         }
 
-        let mut params = WhisperContextParameters::default();
-        params.use_gpu(true);
+        let path_str = model_path.to_str().ok_or("Invalid model path")?;
 
-        let new_ctx = WhisperContext::new_with_params(
-            model_path.to_str().ok_or("Invalid model path")?,
-            params,
-        )
-        .map_err(|e| format!("Failed to load whisper model '{}': {}", model_id, e))?;
+        // Phase B: Try with flash attention enabled first, fall back if it fails
+        let (new_ctx, flash_enabled) = {
+            let mut params = WhisperContextParameters::default();
+            params.use_gpu(true);
+            params.use_flash_attn(true);
+
+            match WhisperContext::new_with_params(path_str, params) {
+                Ok(ctx) => {
+                    eprintln!("DIAG WHISPER: context created, flash_attn=true");
+                    (ctx, true)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "DIAG WHISPER: flash_attn failed ({}), falling back to non-flash",
+                        e
+                    );
+                    let mut fallback_params = WhisperContextParameters::default();
+                    fallback_params.use_gpu(true);
+
+                    let ctx = WhisperContext::new_with_params(path_str, fallback_params)
+                        .map_err(|e| {
+                            format!("Failed to load whisper model '{}': {}", model_id, e)
+                        })?;
+                    eprintln!("DIAG WHISPER: context created, flash_attn=false (fallback)");
+                    (ctx, false)
+                }
+            }
+        };
 
         {
             let mut ctx = self.ctx.lock().map_err(|e| e.to_string())?;
@@ -55,10 +81,17 @@ impl TranscriptionEngine {
             let mut active = self.active_model.lock().map_err(|e| e.to_string())?;
             *active = Some(model_id.to_string());
         }
+        {
+            let mut flash = self.flash_attn_enabled.lock().map_err(|e| e.to_string())?;
+            *flash = flash_enabled;
+        }
 
         Ok(())
     }
 
+    /// Unload the model and free VRAM. SAFETY: The transcription thread must be
+    /// joined before calling this — any live WhisperState holds a C pointer into
+    /// the context's model weights. See `join_transcription_thread()` in dictation.rs.
     pub fn unload_model(&self) -> Result<(), String> {
         let mut ctx = self.ctx.lock().map_err(|e| e.to_string())?;
         *ctx = None;
@@ -75,20 +108,28 @@ impl TranscriptionEngine {
         self.ctx.lock().map(|c| c.is_some()).unwrap_or(false)
     }
 
-    pub fn transcribe(
-        &self,
-        audio_data: &[f32],
-        language: &str,
-    ) -> Result<Vec<TranscriptionSegment>, String> {
+    /// Create a WhisperState from the loaded context. Call once at the start of a
+    /// dictation session, then reuse the state for every chunk via `transcribe()`.
+    ///
+    /// SAFETY INVARIANT: The returned WhisperState holds a C-level pointer into the
+    /// WhisperContext's model weights. The state must be dropped before `unload_model()`
+    /// is called. The current architecture enforces this: `join_transcription_thread()`
+    /// joins the thread (dropping the state) before any model operation can proceed.
+    pub fn create_inference_state(&self) -> Result<WhisperState, String> {
         let ctx_guard = self.ctx.lock().map_err(|e| e.to_string())?;
         let ctx = ctx_guard
             .as_ref()
-            .ok_or("No model loaded. Load a model before transcribing.")?;
+            .ok_or("No model loaded. Load a model before creating state.")?;
+        ctx.create_state()
+            .map_err(|e| format!("Failed to create whisper state: {}", e))
+    }
 
-        let mut state = ctx
-            .create_state()
-            .map_err(|e| format!("Failed to create state: {}", e))?;
-
+    pub fn transcribe(
+        &self,
+        state: &mut WhisperState,
+        audio_data: &[f32],
+        language: &str,
+    ) -> Result<Vec<TranscriptionSegment>, String> {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
 
         if language != "auto" {
@@ -105,11 +146,17 @@ impl TranscriptionEngine {
         params.set_suppress_nst(true);
         params.set_no_context(true);
 
-        // Start timer
-        let _start = std::time::Instant::now();
+        let start = std::time::Instant::now();
         state
             .full(params, audio_data)
             .map_err(|e| format!("Transcription failed: {}", e))?;
+        let elapsed = start.elapsed();
+        eprintln!(
+            "PERF: whisper transcribe took {}ms ({} samples, {:.1}s audio)",
+            elapsed.as_millis(),
+            audio_data.len(),
+            audio_data.len() as f64 / 16000.0
+        );
 
         let num_segments = state.full_n_segments();
 
