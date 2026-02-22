@@ -23,6 +23,7 @@ pub fn run() {
         config: Mutex::new(config),
         transcription_thread: Mutex::new(None),
         audio_handle: Mutex::new(None),
+        last_shortcut: Mutex::new(None),
     };
 
     tauri::Builder::default()
@@ -30,11 +31,21 @@ pub fn run() {
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
+                    use std::time::{Duration, Instant};
                     use tauri::Manager;
                     use tauri_plugin_global_shortcut::ShortcutState;
 
                     if event.state() == ShortcutState::Pressed {
                         let state = app.state::<AppState>();
+                        let mut last = state.last_shortcut.lock().unwrap();
+                        let now = Instant::now();
+                        if let Some(prev) = *last {
+                            if now.duration_since(prev) < Duration::from_millis(300) {
+                                return;
+                            }
+                        }
+                        *last = Some(now);
+                        drop(last);
                         let _ = commands::dictation::toggle_dictation_inner(&state, app);
                     }
                 })

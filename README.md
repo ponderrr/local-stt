@@ -1,71 +1,112 @@
 # WhisperType
 
-Local AI-powered speech-to-text dictation for Linux. Everything runs on your machine — no cloud, no API keys, no data leaving your computer.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-lightgrey.svg)](#requirements)
+[![GPU: CUDA](https://img.shields.io/badge/GPU-CUDA-green.svg)](#requirements)
 
-Built with **Tauri** (Rust) + **React** (TypeScript) + **whisper.cpp** (CUDA-accelerated).
+Local, private speech-to-text for Linux. Runs entirely on your hardware with OpenAI Whisper and CUDA acceleration.
+
+> Screenshot coming soon
 
 ## Features
 
-- **Real-time dictation** — Speak and text appears in your active application
-- **GPU-accelerated** — Uses NVIDIA CUDA for fast transcription
-- **Multiple models** — Tiny to Large-v3, switch via dropdown
-- **Global hotkey** — Ctrl+Shift+Space toggles from anywhere
-- **Privacy-first** — 100% local, zero network after model download
-- **Dual output** — Type into active field + copy to clipboard
+WhisperType turns your voice into text without ever leaving your machine. Audio is captured natively through PipeWire, processed by a multi-threaded Rust pipeline with energy-based voice activity detection, and transcribed by whisper.cpp running on your NVIDIA GPU. There are no cloud calls, no API keys, and no subscriptions. Your voice data never touches a network.
 
-## Prerequisites
+The global hotkey (Ctrl+Shift+Space) works from any application. Speak naturally, and transcribed text is typed directly into the active field, copied to the clipboard, or both. Transcription latency on an RTX-class GPU is typically under 300ms per chunk.
 
-- **OS:** Linux (developed on CachyOS/Arch). Note: The audio capture pipeline is optimized for PipeWire on Linux.
-- **GPU:** NVIDIA GPU with CUDA support (recommended)
-- **CUDA Toolkit:** Required for GPU acceleration
-- **Node.js:** 18+
-- **Rust Toolchain:** Latest stable
+- **Models:** Supports all Whisper model sizes from tiny to large-v3, downloadable from the app
+- **Languages:** English, Spanish, French, German, Japanese, Chinese, or auto-detect
+- **Output modes:** Type into active field, clipboard, or both
+- **Audio:** PipeWire-native capture via pipewire-pulse at 48kHz, resampled to 16kHz mono
+- **Performance:** CUDA-accelerated inference with flash attention, session-level state reuse
 
-## Installation
+## Requirements
 
-### System Dependencies (Arch/CachyOS)
+- **OS:** Linux with PipeWire (X11 or Wayland)
+- **GPU:** NVIDIA GPU with CUDA support
+- **CUDA Toolkit:** 12.0+ with cuDNN
+- **Rust:** 1.77+ (install via [rustup](https://rustup.rs))
+- **Node.js:** 20+
+- **System packages:**
 
+Arch Linux / CachyOS:
 ```bash
-sudo pacman -S webkit2gtk-4.1 base-devel curl wget openssl \
-  alsa-lib alsa-utils cuda cudnn libappindicator-gtk3 librsvg
+sudo pacman -S webkit2gtk-4.1 libappindicator-gtk3 librsvg patchelf \
+  libpulse pkg-config cmake base-devel cuda cudnn
 ```
 
-### Build & Run
+Debian / Ubuntu:
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+  patchelf libpulse-dev pkg-config cmake build-essential
+```
+
+CUDA and cuDNN must be installed separately on Debian/Ubuntu. See the [NVIDIA CUDA installation guide](https://developer.nvidia.com/cuda-downloads).
+
+## Installation
 
 ```bash
 git clone https://github.com/ponderrr/local-stt.git
 cd local-stt
 npm install
-npm run dev
+```
 
-# In a separate terminal:
-cd backend
-cargo run
+### Development
+
+```bash
+npx tauri dev
 ```
 
 ### Production Build
 
 ```bash
-cargo tauri build
+npx tauri build
+```
+
+For NVIDIA Blackwell GPUs (RTX 50-series, compute capability 12.0):
+
+```bash
+CMAKE_CUDA_ARCHITECTURES=120 npx tauri build
 ```
 
 ## Usage
 
 1. Launch WhisperType
-2. Complete first-run setup (GPU detection + model download)
-3. Select your preferred model from the dropdown
-4. Press **Ctrl+Shift+Space** to start dictating
-5. Speak naturally — text appears in real-time
+2. Select a model from the dropdown (large-v3 recommended for quality)
+3. If the model isn't downloaded yet, click to download it
+4. Press **Ctrl+Shift+Space** to start dictation
+5. Speak naturally
 6. Press **Ctrl+Shift+Space** again to stop
 
-## Architecture Overview
+Transcribed text is output according to your configured output mode (type into active field, clipboard, or both). You can change this in Settings.
 
-- **Backend:** Rust (Tauri)
-- **Frontend:** React + TypeScript + Tailwind + shadcn/ui
-- **Transcription:** whisper.cpp via whisper-rs with CUDA acceleration
-- **Audio Pipeline:**
-  Microphone input is securely handled by an isolated, non-blocking **Audio Actor Thread** using `cpal`. Samples are pushed directly into a lock-free `ringbuf` heap. A dedicated **DSP Thread** pulls samples out, computes energy-based Voice Activity Detection (VAD), downsamples to mono 16kHz, and dispatches framed clean speech chunks over an asynchronous channel to the STT transcription engine. This prevents OS-level audio buffer underruns completely.
+## Configuration
+
+WhisperType stores its configuration at `~/.whispertype/config.json`. Key settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `hotkey` | `Ctrl+Shift+Space` | Global toggle shortcut |
+| `output_mode` | `both` | `type_into_field`, `clipboard`, or `both` |
+| `audio_device` | `null` | PulseAudio source name, or `null` for system default |
+| `language` | `auto` | Language code (`en`, `es`, `fr`, etc.) or `auto` |
+| `vad_threshold` | `0.012` | Voice activity detection sensitivity (lower = more sensitive) |
+| `chunk_duration_ms` | `2000` | Audio chunk length sent to Whisper |
+| `overlap_ms` | `500` | Overlap between consecutive chunks |
+| `default_model` | `large-v3` | Model loaded on startup |
+
+Models are stored in `~/.whispertype/models/`.
+
+## Architecture
+
+WhisperType is a Tauri 2 desktop app with a Rust backend and React + TypeScript frontend. Audio capture runs through PipeWire via the PulseAudio Simple API (`pipewire-pulse`), feeding samples into a lock-free ring buffer. A dedicated DSP thread drains the buffer, converts to mono 16kHz, runs energy-based voice activity detection, and dispatches speech chunks over an MPSC channel to the transcription thread. The transcription thread runs whisper.cpp (via `whisper-rs`) with CUDA acceleration and flash attention, reusing a single inference state per session to avoid repeated GPU initialization.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the detailed threading model and data flow.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, build commands, and PR guidelines.
 
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -1,8 +1,13 @@
 [package]
 name = "whispertype"
 version = "0.1.0"
-description = "Local AI-powered dictation desktop app"
+description = "Local, private speech-to-text powered by Whisper"
 authors = ["ponderrr <robert.ponder@selu.edu>"]
+license = "MIT"
+homepage = "https://github.com/ponderrr/local-stt"
+repository = "https://github.com/ponderrr/local-stt"
+keywords = ["speech-to-text", "whisper", "tauri", "cuda", "dictation"]
+categories = ["multimedia::audio", "command-line-utilities"]
 edition = "2021"
 default-run = "whispertype"
 

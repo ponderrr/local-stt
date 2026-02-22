@@ -135,6 +135,7 @@ impl TranscriptionEngine {
         params.set_print_timestamps(false);
         params.set_token_timestamps(false);
         params.set_single_segment(true);
+        params.set_no_timestamps(true);
         params.set_suppress_blank(true);
         params.set_suppress_nst(true);
         params.set_no_context(true);

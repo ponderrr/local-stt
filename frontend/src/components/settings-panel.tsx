@@ -52,8 +52,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </option>
             <option
               value="type_into_field"
-              style={{ backgroundColor: '#18181b', color: '#fafafa' }}
-            >
+                         >
               Type into Field
             </option>
             <option value="clipboard" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
@@ -84,8 +83,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               <option
                 key={device}
                 value={device}
-                style={{ backgroundColor: '#18181b', color: '#fafafa' }}
-              >
+                             >
                 {device}
               </option>
             ))}

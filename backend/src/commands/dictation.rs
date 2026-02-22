@@ -3,6 +3,7 @@
 
 use ringbuf::traits::Split;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::audio::AudioPipeline;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub config: Mutex<Config>,
     pub transcription_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
     pub audio_handle: Mutex<Option<crate::audio::capture::AudioHandle>>,
+    pub last_shortcut: Mutex<Option<Instant>>,
 }
 
 fn join_transcription_thread(state: &AppState) {
@@ -23,8 +25,12 @@ fn join_transcription_thread(state: &AppState) {
     if let Some(h) = handle {
         h.join().ok();
     }
-    // Drop the audio stream to close it
-    let _ = state.audio_handle.lock().unwrap().take();
+    // Send Quit to terminate the pulse-actor thread, then drop the handle
+    let mut audio_lock = state.audio_handle.lock().unwrap();
+    if let Some(h) = audio_lock.as_ref() {
+        let _ = h.cmd_tx.send(crate::audio::capture::AudioCommand::Quit);
+    }
+    audio_lock.take();
 }
 
 /// Core toggle logic, callable from both Tauri commands and the global hotkey handler.
@@ -56,46 +62,26 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             return Ok(true);
         }
 
-        let receiver_opt;
+        let rb = ringbuf::HeapRb::<f32>::new(48000 * 5);
+        let (prod, cons) = rb.split();
 
-        if handle_lock.is_none() {
-            let rb = ringbuf::HeapRb::<f32>::new(48000 * 5);
-            let (prod, cons) = rb.split();
+        let device_name = config.audio_device.clone();
+        let new_handle =
+            crate::audio::capture::AudioCapture::spawn_audio_actor(device_name, prod)?;
 
-            let device_name = config.audio_device.clone();
-            let new_handle =
-                crate::audio::capture::AudioCapture::spawn_audio_actor(device_name, prod)?;
+        let device_rate = new_handle.sample_rate;
+        let device_channels = new_handle.channels;
 
-            let device_rate = new_handle.sample_rate;
-            let device_channels = new_handle.channels;
+        *handle_lock = Some(new_handle);
 
-            *handle_lock = Some(new_handle);
-
-            receiver_opt = Some(state.pipeline.start(
-                Some(cons),
-                config.vad_threshold,
-                config.chunk_duration_ms,
-                config.overlap_ms,
-                device_rate,
-                device_channels,
-            )?);
-        } else {
-            let handle = handle_lock.as_ref().unwrap();
-            let _ = handle
-                .cmd_tx
-                .send(crate::audio::capture::AudioCommand::Start);
-
-            receiver_opt = Some(state.pipeline.start(
-                None, // Use cached consumer
-                config.vad_threshold,
-                config.chunk_duration_ms,
-                config.overlap_ms,
-                handle.sample_rate,
-                handle.channels,
-            )?);
-        }
-
-        let receiver = receiver_opt.unwrap();
+        let receiver = state.pipeline.start(
+            Some(cons),
+            config.vad_threshold,
+            config.chunk_duration_ms,
+            config.overlap_ms,
+            device_rate,
+            device_channels,
+        )?;
 
         let language = config.language.clone();
         let output_mode = config.output_mode.clone();
@@ -190,6 +176,11 @@ pub fn start_dictation(state: State<'_, AppState>, app: AppHandle) -> Result<(),
 #[tauri::command]
 pub fn stop_dictation(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
     if state.pipeline.is_running() {
+        if let Some(handle) = state.audio_handle.lock().unwrap().as_ref() {
+            let _ = handle
+                .cmd_tx
+                .send(crate::audio::capture::AudioCommand::Stop);
+        }
         state.pipeline.stop();
         join_transcription_thread(&state);
         app.emit("dictation-status", "idle").ok();
@@ -215,6 +206,7 @@ mod tests {
             config: Mutex::new(config),
             transcription_thread: Mutex::new(None),
             audio_handle: Mutex::new(None),
+            last_shortcut: Mutex::new(None),
         };
 
         assert!(
@@ -236,6 +228,7 @@ mod tests {
             config: Mutex::new(Config::default()),
             transcription_thread: Mutex::new(None),
             audio_handle: Mutex::new(None),
+            last_shortcut: Mutex::new(None),
         };
 
         // Should not panic or block
