@@ -104,7 +104,12 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
 
         app.emit("dictation-status", "listening").ok();
 
-        join_transcription_thread(state);
+        // Join any previous transcription thread, but do NOT clear the audio
+        // handle — that belongs to this session. join_transcription_thread()
+        // is only for the stop path where full cleanup is needed.
+        if let Some(h) = state.transcription_thread.lock().unwrap().take() {
+            h.join().ok();
+        }
 
         let engine = state.engine.clone();
         let app_clone = app.clone();
