@@ -1,6 +1,7 @@
 //! Application configuration: serialization, default values, and persistence
 //! to `~/.whispertype/config.json`.
 
+use crate::audio::vad::VadBackend;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -22,6 +23,8 @@ pub struct Config {
     pub audio_device: Option<String>,
     pub language: String,
     pub vad_threshold: f32,
+    #[serde(default)]
+    pub vad_backend: VadBackend,
     pub chunk_duration_ms: u32,
     pub overlap_ms: u32,
     pub downloaded_models: Vec<String>,
@@ -33,11 +36,12 @@ impl Default for Config {
         Self {
             version: 1,
             hotkey: "Ctrl+Shift+Space".to_string(),
-            default_model: "large-v3".to_string(),
+            default_model: "distil-large-v3".to_string(),
             output_mode: OutputMode::Both,
             audio_device: None,
             language: "auto".to_string(),
             vad_threshold: 0.012,
+            vad_backend: VadBackend::default(),
             chunk_duration_ms: 2000,
             overlap_ms: 500,
             downloaded_models: Vec::new(),
@@ -127,7 +131,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.version, 1);
         assert_eq!(config.hotkey, "Ctrl+Shift+Space");
-        assert_eq!(config.default_model, "large-v3");
+        assert_eq!(config.default_model, "distil-large-v3");
         assert_eq!(config.output_mode, OutputMode::Both);
         assert!(config.audio_device.is_none());
         assert_eq!(config.language, "auto");
@@ -135,6 +139,7 @@ mod tests {
         assert_eq!(config.chunk_duration_ms, 2000);
         assert_eq!(config.overlap_ms, 500);
         assert!(config.downloaded_models.is_empty());
+        assert_eq!(config.vad_backend, crate::audio::vad::VadBackend::Silero);
         assert!(!config.first_run_complete);
     }
 
@@ -159,6 +164,7 @@ mod tests {
             audio_device: Some("USB Mic".to_string()),
             language: "en".to_string(),
             vad_threshold: 0.05,
+            vad_backend: crate::audio::vad::VadBackend::Energy,
             chunk_duration_ms: 5000,
             overlap_ms: 1000,
             downloaded_models: vec!["tiny".to_string(), "base".to_string()],
@@ -178,6 +184,10 @@ mod tests {
         assert_eq!(deserialized.chunk_duration_ms, 5000);
         assert_eq!(deserialized.overlap_ms, 1000);
         assert_eq!(deserialized.downloaded_models, vec!["tiny", "base"]);
+        assert_eq!(
+            deserialized.vad_backend,
+            crate::audio::vad::VadBackend::Energy
+        );
         assert!(deserialized.first_run_complete);
     }
 
@@ -325,6 +335,7 @@ mod tests {
             audio_device: Some("Test Mic".to_string()),
             language: "en".to_string(),
             vad_threshold: 0.02,
+            vad_backend: crate::audio::vad::VadBackend::Energy,
             chunk_duration_ms: 4000,
             overlap_ms: 750,
             downloaded_models: vec!["tiny".to_string()],
@@ -383,5 +394,30 @@ mod tests {
         assert_eq!(OutputMode::TypeIntoField, OutputMode::TypeIntoField);
         assert_ne!(OutputMode::Both, OutputMode::Clipboard);
         assert_ne!(OutputMode::Clipboard, OutputMode::TypeIntoField);
+    }
+
+    #[test]
+    fn test_config_backward_compat_missing_vad_backend() {
+        // v0.1.0 config.json files won't have vad_backend field.
+        // #[serde(default)] should make it deserialize as Silero.
+        let json = r#"{
+            "version": 1,
+            "hotkey": "Ctrl+Shift+Space",
+            "default_model": "large-v3",
+            "output_mode": "both",
+            "audio_device": null,
+            "language": "auto",
+            "vad_threshold": 0.012,
+            "chunk_duration_ms": 2000,
+            "overlap_ms": 500,
+            "downloaded_models": [],
+            "first_run_complete": false
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            config.vad_backend,
+            crate::audio::vad::VadBackend::Silero,
+            "missing vad_backend should default to Silero"
+        );
     }
 }

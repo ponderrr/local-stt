@@ -13,7 +13,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use vad::VoiceActivityDetector;
+use vad::{EnergyVad, SileroVad, VadBackend};
 
 /// Converts an interleaved multi-channel audio slice into a mono signal
 /// by averaging the samples across all available channels in each frame.
@@ -300,10 +300,12 @@ impl AudioPipeline {
     }
 
     /// Start the audio pipeline. Returns a receiver that yields speech audio chunks.
+    #[allow(clippy::too_many_arguments)]
     pub fn start(
         &self,
         new_consumer: Option<ringbuf::HeapCons<f32>>,
         vad_threshold: f32,
+        vad_backend: VadBackend,
         chunk_duration_ms: u32,
         overlap_ms: u32,
         device_rate: u32,
@@ -329,9 +331,20 @@ impl AudioPipeline {
             .name("dsp-pipeline".into())
             .spawn(move || {
                 let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
-                let mut vad = VoiceActivityDetector::new(vad_threshold);
+                let mut energy_vad = EnergyVad::new(vad_threshold);
+                let mut silero_vad = if vad_backend == VadBackend::Silero {
+                    match SileroVad::new(0.5) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            eprintln!("silero-vad: failed to load, falling back to energy: {}", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
 
-                let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
+                let mut read_buf = vec![0.0f32; 4800];
                 let mut consecutive_speech: u32 = 0;
                 let mut consecutive_silent: u32 = 0;
 
@@ -341,11 +354,20 @@ impl AudioPipeline {
                         let mono = to_mono(&read_buf[..n], device_channels);
                         let resampled = resample(&mono, device_rate, 16000);
 
+                        // Feed resampled audio to Silero VAD (frame-level, 32ms granularity)
+                        if let Some(ref mut svad) = silero_vad {
+                            svad.process_audio(&resampled);
+                        }
+
                         buffer.write(&resampled);
 
                         if buffer.has_chunk() {
                             if let Some(chunk) = buffer.extract_chunk() {
-                                let has_speech = vad.contains_speech(&chunk);
+                                let has_speech = if let Some(ref svad) = silero_vad {
+                                    svad.is_speech()
+                                } else {
+                                    energy_vad.contains_speech(&chunk)
+                                };
 
                                 if has_speech {
                                     consecutive_speech += 1;
@@ -368,7 +390,6 @@ impl AudioPipeline {
                             }
                         }
                     } else {
-                        // Empty buffer: sleep briefly
                         std::thread::sleep(std::time::Duration::from_millis(10));
                     }
                 }

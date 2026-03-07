@@ -76,6 +76,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let receiver = state.pipeline.start(
             Some(cons),
             config.vad_threshold,
+            config.vad_backend.clone(),
             config.chunk_duration_ms,
             config.overlap_ms,
             device_rate,

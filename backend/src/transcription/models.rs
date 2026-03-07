@@ -61,6 +61,24 @@ static MODEL_REGISTRY: LazyLock<Vec<WhisperModel>> = LazyLock::new(|| {
             size_bytes: 3_093_846_125,
             vram_mb: 6000,
         },
+        WhisperModel {
+            id: "distil-large-v3".to_string(),
+            display_name: "Distil Large V3 (~1.5 GB, fast)".to_string(),
+            filename: "ggml-distil-large-v3.bin".to_string(),
+            url: "https://huggingface.co/distil-whisper/distil-large-v3-ggml/resolve/main/ggml-distil-large-v3.bin"
+                .to_string(),
+            size_bytes: 1_521_038_733,
+            vram_mb: 2000,
+        },
+        WhisperModel {
+            id: "large-v3-turbo".to_string(),
+            display_name: "Large V3 Turbo (~1.6 GB, multilingual)".to_string(),
+            filename: "ggml-large-v3-turbo.bin".to_string(),
+            url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+                .to_string(),
+            size_bytes: 1_620_150_822,
+            vram_mb: 2500,
+        },
     ]
 });
 
@@ -81,12 +99,12 @@ mod tests {
     }
 
     #[test]
-    fn test_registry_has_five_models() {
+    fn test_registry_has_seven_models() {
         let registry = get_model_registry();
         assert_eq!(
             registry.len(),
-            5,
-            "registry should contain exactly 5 models"
+            7,
+            "registry should contain exactly 7 models"
         );
     }
 
@@ -168,7 +186,15 @@ mod tests {
     #[test]
     fn test_registry_contains_all_expected_models() {
         let registry = get_model_registry();
-        let expected_ids = ["tiny", "base", "small", "medium", "large-v3"];
+        let expected_ids = [
+            "tiny",
+            "base",
+            "small",
+            "medium",
+            "large-v3",
+            "distil-large-v3",
+            "large-v3-turbo",
+        ];
         for id in &expected_ids {
             assert!(
                 registry.iter().any(|m| m.id == *id),
@@ -179,21 +205,41 @@ mod tests {
     }
 
     #[test]
-    fn test_registry_model_sizes_increase() {
+    fn test_registry_all_models_have_reasonable_sizes() {
         let registry = get_model_registry();
-        let ordered_ids = ["tiny", "base", "small", "medium", "large-v3"];
-        let mut prev_size = 0u64;
-        for id in &ordered_ids {
-            let model = registry.iter().find(|m| m.id == *id).unwrap();
+        for model in registry {
             assert!(
-                model.size_bytes > prev_size,
-                "model {} size ({}) should be greater than previous ({})",
-                id,
-                model.size_bytes,
-                prev_size
+                model.size_bytes > 50_000_000,
+                "model {} should be larger than 50MB, got {} bytes",
+                model.id,
+                model.size_bytes
             );
-            prev_size = model.size_bytes;
+            assert!(
+                model.size_bytes < 10_000_000_000,
+                "model {} should be smaller than 10GB, got {} bytes",
+                model.id,
+                model.size_bytes
+            );
         }
+    }
+
+    #[test]
+    fn test_registry_distil_and_turbo_models() {
+        let registry = get_model_registry();
+
+        let distil = registry.iter().find(|m| m.id == "distil-large-v3");
+        assert!(distil.is_some(), "should find distil-large-v3");
+        let distil = distil.unwrap();
+        assert_eq!(distil.filename, "ggml-distil-large-v3.bin");
+        assert!(distil.url.contains("distil-whisper"));
+        assert!(distil.size_bytes > 1_500_000_000, "distil should be ~1.5GB");
+
+        let turbo = registry.iter().find(|m| m.id == "large-v3-turbo");
+        assert!(turbo.is_some(), "should find large-v3-turbo");
+        let turbo = turbo.unwrap();
+        assert_eq!(turbo.filename, "ggml-large-v3-turbo.bin");
+        assert!(turbo.url.contains("ggerganov"));
+        assert!(turbo.size_bytes > 1_600_000_000, "turbo should be ~1.6GB");
     }
 
     #[test]

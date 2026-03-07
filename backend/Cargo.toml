@@ -1,6 +1,6 @@
 [package]
 name = "whispertype"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 description = "Local, private speech-to-text powered by Whisper"
 authors = ["ponderrr <robert.ponder@selu.edu>"]
 license = "MIT"
@@ -48,6 +48,8 @@ futures-util = "0.3"
 ringbuf = "0.4"
 libpulse-binding = "2.28"
 libpulse-simple-binding = "2.28"
+silero-vad-rust = { git = "https://github.com/sheldonix/silero-vad-rust.git" }
+ort = { version = "=2.0.0-rc.10", features = ["download-binaries", "load-dynamic", "ndarray"] }
 
 [dev-dependencies]
 tempfile = "3"
