@@ -1,12 +1,11 @@
 #![allow(clippy::items_after_test_module)]
 //! Audio capture pipeline: microphone input via PulseAudio, ring buffer staging,
-//! format conversion (mono + resample to 16kHz), VAD filtering, and chunk dispatch.
+//! format conversion (mono + resample to 16kHz), VAD filtering, and segment dispatch.
 
 pub mod buffer;
 pub mod capture;
 pub mod vad;
 
-use buffer::AudioRingBuffer;
 use ringbuf::traits::Consumer;
 use std::sync::mpsc;
 use std::sync::{
@@ -14,6 +13,15 @@ use std::sync::{
     Arc,
 };
 use vad::{EnergyVad, SileroVad, VadBackend};
+
+/// Messages sent from the DSP thread to the transcription thread.
+#[derive(Debug)]
+pub enum AudioMessage {
+    /// A segment of resampled 16kHz mono audio (~100ms per segment).
+    Segment(Vec<f32>),
+    /// VAD detected end of speech (silence after active speech).
+    EndOfSpeech,
+}
 
 /// Converts an interleaved multi-channel audio slice into a mono signal
 /// by averaging the samples across all available channels in each frame.
@@ -253,6 +261,37 @@ mod tests {
         }
     }
 
+    // --- AudioMessage Tests ---
+
+    #[test]
+    fn test_audio_message_segment_carries_data() {
+        let data = vec![0.5f32; 1600];
+        let msg = AudioMessage::Segment(data.clone());
+        match msg {
+            AudioMessage::Segment(d) => assert_eq!(d.len(), 1600),
+            _ => panic!("Expected Segment variant"),
+        }
+    }
+
+    #[test]
+    fn test_audio_message_end_of_speech() {
+        let msg = AudioMessage::EndOfSpeech;
+        assert!(matches!(msg, AudioMessage::EndOfSpeech));
+    }
+
+    #[test]
+    fn test_audio_message_channel_transport() {
+        let (tx, rx) = std::sync::mpsc::channel::<AudioMessage>();
+        tx.send(AudioMessage::Segment(vec![1.0; 512])).unwrap();
+        tx.send(AudioMessage::EndOfSpeech).unwrap();
+
+        let msg1 = rx.recv().unwrap();
+        assert!(matches!(msg1, AudioMessage::Segment(_)));
+
+        let msg2 = rx.recv().unwrap();
+        assert!(matches!(msg2, AudioMessage::EndOfSpeech));
+    }
+
     // --- AudioPipeline Tests ---
 
     /// Verifies that an AudioPipeline is instantiated with a stopped state.
@@ -299,18 +338,15 @@ impl AudioPipeline {
         }
     }
 
-    /// Start the audio pipeline. Returns a receiver that yields speech audio chunks.
-    #[allow(clippy::too_many_arguments)]
+    /// Start the audio pipeline. Returns a receiver that yields AudioMessage segments.
     pub fn start(
         &self,
         new_consumer: Option<ringbuf::HeapCons<f32>>,
         vad_threshold: f32,
         vad_backend: VadBackend,
-        chunk_duration_ms: u32,
-        overlap_ms: u32,
         device_rate: u32,
         device_channels: u16,
-    ) -> Result<mpsc::Receiver<Vec<f32>>, String> {
+    ) -> Result<mpsc::Receiver<AudioMessage>, String> {
         let is_running = self.is_running.clone();
         is_running.store(true, Ordering::SeqCst);
 
@@ -324,13 +360,12 @@ impl AudioPipeline {
         let mut consumer =
             cons.ok_or_else(|| "No consumer available for AudioPipeline".to_string())?;
 
-        let (chunk_tx, chunk_rx) = mpsc::channel::<Vec<f32>>();
+        let (chunk_tx, chunk_rx) = mpsc::channel::<AudioMessage>();
         let running = is_running.clone();
 
         let handle = std::thread::Builder::new()
             .name("dsp-pipeline".into())
             .spawn(move || {
-                let mut buffer = AudioRingBuffer::new(16000, chunk_duration_ms, overlap_ms, 30);
                 let mut energy_vad = EnergyVad::new(vad_threshold);
                 let mut silero_vad = if vad_backend == VadBackend::Silero {
                     match SileroVad::new(0.5) {
@@ -344,54 +379,56 @@ impl AudioPipeline {
                     None
                 };
 
-                let mut read_buf = vec![0.0f32; 4800];
-                let mut consecutive_speech: u32 = 0;
-                let mut consecutive_silent: u32 = 0;
+                let mut read_buf = vec![0.0f32; 4800]; // 100ms at 48kHz
+                let mut was_speech = false;
+                let mut silence_after_speech: u32 = 0;
+                let grace_segments: u32 = 5; // ~500ms grace after speech ends
 
                 while running.load(Ordering::SeqCst) {
                     let n = consumer.pop_slice(&mut read_buf);
-                    if n > 0 {
-                        let mono = to_mono(&read_buf[..n], device_channels);
-                        let resampled = resample(&mono, device_rate, 16000);
+                    if n == 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        continue;
+                    }
 
-                        // Feed resampled audio to Silero VAD (frame-level, 32ms granularity)
-                        if let Some(ref mut svad) = silero_vad {
-                            svad.process_audio(&resampled);
+                    let mono = to_mono(&read_buf[..n], device_channels);
+                    let resampled = resample(&mono, device_rate, 16000);
+
+                    // Frame-level VAD
+                    let is_speech = if let Some(ref mut svad) = silero_vad {
+                        svad.process_audio(&resampled);
+                        svad.is_speech()
+                    } else {
+                        energy_vad.contains_speech(&resampled)
+                    };
+
+                    if is_speech {
+                        was_speech = true;
+                        silence_after_speech = 0;
+                        if chunk_tx.send(AudioMessage::Segment(resampled)).is_err() {
+                            break;
                         }
-
-                        buffer.write(&resampled);
-
-                        if buffer.has_chunk() {
-                            if let Some(chunk) = buffer.extract_chunk() {
-                                let has_speech = if let Some(ref svad) = silero_vad {
-                                    svad.is_speech()
-                                } else {
-                                    energy_vad.contains_speech(&chunk)
-                                };
-
-                                if has_speech {
-                                    consecutive_speech += 1;
-                                    consecutive_silent = 0;
-                                    if chunk_tx.send(chunk).is_err() {
-                                        break;
-                                    }
-                                } else {
-                                    consecutive_silent += 1;
-                                    let had_recent_speech = consecutive_speech >= 2;
-                                    consecutive_speech = 0;
-
-                                    if had_recent_speech
-                                        && consecutive_silent <= 1
-                                        && chunk_tx.send(chunk).is_err()
-                                    {
-                                        break;
-                                    }
-                                }
+                    } else if was_speech {
+                        silence_after_speech += 1;
+                        // Send grace segments (capture tail of utterance)
+                        if silence_after_speech <= grace_segments
+                            && chunk_tx.send(AudioMessage::Segment(resampled)).is_err()
+                        {
+                            break;
+                        }
+                        if silence_after_speech == grace_segments {
+                            if chunk_tx.send(AudioMessage::EndOfSpeech).is_err() {
+                                break;
+                            }
+                            was_speech = false;
+                            silence_after_speech = 0;
+                            // Reset Silero state for next utterance
+                            if let Some(ref mut svad) = silero_vad {
+                                svad.reset();
                             }
                         }
-                    } else {
-                        std::thread::sleep(std::time::Duration::from_millis(10));
                     }
+                    // If !is_speech && !was_speech: silence with no prior speech, do nothing
                 }
 
                 consumer

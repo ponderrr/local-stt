@@ -2,14 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { events } from '@/lib/tauri';
 
 export function useTranscription() {
-  const [transcript, setTranscript] = useState('');
+  const [committed, setCommitted] = useState('');
+  const [partial, setPartial] = useState('');
 
   useEffect(() => {
     const unlisten = events.onTranscription((data) => {
-      setTranscript((prev) => {
-        const separator = prev && !prev.endsWith(' ') ? ' ' : '';
-        return prev + separator + data.text;
-      });
+      if (data.is_partial) {
+        setPartial(data.text);
+      } else {
+        setCommitted((prev) => {
+          const separator = prev && !prev.endsWith(' ') ? ' ' : '';
+          return prev + separator + data.text;
+        });
+        setPartial('');
+      }
     });
 
     return () => {
@@ -17,9 +23,12 @@ export function useTranscription() {
     };
   }, []);
 
+  const transcript = committed + (partial ? (committed ? ' ' : '') + partial : '');
+
   const clear = useCallback(() => {
-    setTranscript('');
+    setCommitted('');
+    setPartial('');
   }, []);
 
-  return { transcript, clear };
+  return { transcript, committed, partial, clear };
 }

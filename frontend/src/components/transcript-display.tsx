@@ -1,17 +1,20 @@
 import { useEffect, useRef } from 'react';
 
 interface TranscriptDisplayProps {
-  transcript: string;
+  committed: string;
+  partial: string;
 }
 
-export function TranscriptDisplay({ transcript }: TranscriptDisplayProps) {
+export function TranscriptDisplay({ committed, partial }: TranscriptDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [transcript]);
+  }, [committed, partial]);
+
+  const hasContent = committed || partial;
 
   return (
     <div className="bg-[#131316] border border-white/[0.08] rounded-lg p-1 h-full flex flex-col">
@@ -20,10 +23,17 @@ export function TranscriptDisplay({ transcript }: TranscriptDisplayProps) {
       </h3>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 pb-4 font-mono text-sm text-foreground/90 leading-relaxed"
+        className="flex-1 overflow-y-auto px-4 pb-4 font-mono text-sm leading-relaxed"
       >
-        {transcript ? (
-          <p className="whitespace-pre-wrap">{transcript}</p>
+        {hasContent ? (
+          <p className="whitespace-pre-wrap">
+            <span className="text-foreground/90">{committed}</span>
+            {partial && (
+              <span className="text-foreground/40 italic">
+                {committed ? ' ' : ''}{partial}
+              </span>
+            )}
+          </p>
         ) : (
           <p className="text-zinc-600 text-center italic mt-8">
             Press hotkey or click to start dictating...

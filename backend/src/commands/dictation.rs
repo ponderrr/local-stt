@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::audio::AudioPipeline;
+use crate::audio::{AudioMessage, AudioPipeline};
 use crate::config::Config;
 use crate::output;
 use crate::transcription::engine::TranscriptionEngine;
@@ -77,8 +77,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             Some(cons),
             config.vad_threshold,
             config.vad_backend.clone(),
-            config.chunk_duration_ms,
-            config.overlap_ms,
             device_rate,
             device_channels,
         )?;
@@ -101,8 +99,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
         let app_clone = app.clone();
 
         let handle = std::thread::spawn(move || {
-            // Phase A: Create WhisperState ONCE for this dictation session.
-            // Reused across all chunks — eliminates per-chunk CUDA state init (~300-400ms).
             let mut whisper_state = match engine.create_inference_state() {
                 Ok(s) => {
                     eprintln!("whisper: inference state created (once per session)");
@@ -120,22 +116,81 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                 }
             };
 
-            while let Ok(chunk) = receiver.recv() {
-                match engine.transcribe(&mut whisper_state, &chunk, &language) {
-                    Ok(segments) => {
-                        for segment in &segments {
-                            if let Err(e) = output::output_text(&segment.text, &output_mode) {
-                                app_clone
-                                    .emit("output-error", format!("Failed to output text: {}", e))
-                                    .ok();
-                            }
+            let mut audio_buf: Vec<f32> = Vec::new();
+            let min_samples: usize = 16000; // 1.0s minimum to avoid hallucination
+            let max_samples: usize = 16000 * 30; // 30s maximum buffer
 
+            while let Ok(msg) = receiver.recv() {
+                let mut got_end = false;
+
+                match msg {
+                    AudioMessage::Segment(seg) => audio_buf.extend_from_slice(&seg),
+                    AudioMessage::EndOfSpeech => got_end = true,
+                }
+
+                // Drain all queued messages to get latest audio state
+                while let Ok(m) = receiver.try_recv() {
+                    match m {
+                        AudioMessage::Segment(seg) => audio_buf.extend_from_slice(&seg),
+                        AudioMessage::EndOfSpeech => got_end = true,
+                    }
+                }
+
+                // Cap buffer at maximum window
+                if audio_buf.len() > max_samples {
+                    let excess = audio_buf.len() - max_samples;
+                    audio_buf.drain(..excess);
+                }
+
+                // Skip inference if not enough audio and not end of speech
+                if audio_buf.len() < min_samples {
+                    if got_end {
+                        audio_buf.clear();
+                    }
+                    continue;
+                }
+
+                // Run inference on the full accumulated buffer
+                match engine.transcribe(&mut whisper_state, &audio_buf, &language) {
+                    Ok(segments) => {
+                        let text: String = segments
+                            .iter()
+                            .map(|s| s.text.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+
+                        let text = text.trim().to_string();
+
+                        if got_end {
+                            // Final result: output to keyboard/clipboard + emit permanent
+                            if !text.is_empty() {
+                                if let Err(e) = output::output_text(&text, &output_mode) {
+                                    app_clone
+                                        .emit(
+                                            "output-error",
+                                            format!("Failed to output text: {}", e),
+                                        )
+                                        .ok();
+                                }
+                            }
                             app_clone
                                 .emit(
                                     "transcription-update",
                                     serde_json::json!({
-                                        "text": segment.text,
+                                        "text": text,
                                         "is_partial": false,
+                                    }),
+                                )
+                                .ok();
+                            audio_buf.clear();
+                        } else {
+                            // Partial result: emit live preview only (no keyboard output)
+                            app_clone
+                                .emit(
+                                    "transcription-update",
+                                    serde_json::json!({
+                                        "text": text,
+                                        "is_partial": true,
                                     }),
                                 )
                                 .ok();
@@ -151,7 +206,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     }
                 }
             }
-            // whisper_state dropped here when thread exits, before join returns
+
             app_clone.emit("dictation-status", "idle").ok();
         });
         *state.transcription_thread.lock().unwrap() = Some(handle);

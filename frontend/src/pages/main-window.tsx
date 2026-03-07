@@ -11,7 +11,7 @@ import { useConfig } from '@/hooks/use-config';
 export function MainWindow() {
   const [showSettings, setShowSettings] = useState(false);
   const { status, error } = useDictation();
-  const { transcript, clear } = useTranscription();
+  const { transcript, committed, partial, clear } = useTranscription();
   const { models, activeModel, loadModel, loading } = useModels();
   const { config } = useConfig();
 
@@ -65,7 +65,7 @@ export function MainWindow() {
 
       {/* Transcript Display */}
       <div className="flex-1 mb-4 min-h-0">
-        <TranscriptDisplay transcript={transcript} />
+        <TranscriptDisplay committed={committed} partial={partial} />
       </div>
 
       {/* Status + Actions */}
