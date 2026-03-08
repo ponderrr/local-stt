@@ -12,6 +12,7 @@ export interface Config {
   audio_device: string | null;
   language: string;
   vad_threshold: number;
+  vad_backend: 'energy' | 'silero';
   chunk_duration_ms: number;
   overlap_ms: number;
   downloaded_models: string[];

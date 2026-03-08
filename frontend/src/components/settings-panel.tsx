@@ -124,6 +124,33 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </select>
         </div>
 
+        {/* VAD Backend */}
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground block mb-2">
+            Voice Detection
+          </label>
+          <select
+            value={localConfig.vad_backend}
+            onChange={(e) =>
+              setLocalConfig({
+                ...localConfig,
+                vad_backend: e.target.value as Config['vad_backend'],
+              })
+            }
+            className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground outline-none"
+          >
+            <option value="silero" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Silero AI (recommended)
+            </option>
+            <option value="energy" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Energy (lightweight)
+            </option>
+          </select>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Silero uses neural network detection. Energy uses simple volume threshold.
+          </p>
+        </div>
+
         {/* Hotkey Display */}
         <div>
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground block mb-2">

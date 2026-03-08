@@ -118,6 +118,7 @@ describe('commands', () => {
       audio_device: null,
       language: 'en',
       vad_threshold: 0.01,
+      vad_backend: 'silero' as const,
       chunk_duration_ms: 3000,
       overlap_ms: 500,
       downloaded_models: ['tiny'],
