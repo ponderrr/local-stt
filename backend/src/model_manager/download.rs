@@ -1,8 +1,9 @@
 //! Model lifecycle: async download with progress streaming, atomic file writes,
-//! deletion, and download-status queries.
+//! deletion, and download-status queries. Supports both single-file (Whisper GGML)
+//! and multi-file (Moonshine ONNX) models.
 
 use crate::config::Config;
-use crate::transcription::models::get_model_registry;
+use crate::transcription::models::{get_model_registry, ModelType};
 use futures_util::StreamExt;
 use reqwest::Client;
 use std::path::PathBuf;
@@ -19,22 +20,36 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
     let dest = Config::models_dir().join(&model.filename);
 
     // Skip if already downloaded
-    if dest.exists() {
-        let metadata = std::fs::metadata(&dest).map_err(|e| e.to_string())?;
-        if metadata.len() > 0 {
-            return Ok(dest);
-        }
+    if is_model_downloaded(model_id) {
+        return Ok(dest);
     }
 
-    // Ensure models directory exists (use tokio async version for robustness)
     let models_dir = Config::models_dir();
     tokio::fs::create_dir_all(&models_dir)
         .await
         .map_err(|e| format!("Failed to create models dir: {}", e))?;
 
+    if !model.files.is_empty() {
+        // Multi-file model (Moonshine): create directory, download each file
+        download_multi_file(model_id, &dest, &model.files, model.size_bytes, app_handle).await?;
+    } else {
+        // Single-file model (Whisper)
+        download_single_file(model_id, &dest, &model.url, model.size_bytes, app_handle).await?;
+    }
+
+    Ok(dest)
+}
+
+async fn download_single_file(
+    model_id: &str,
+    dest: &PathBuf,
+    url: &str,
+    expected_size: u64,
+    app_handle: &AppHandle,
+) -> Result<(), String> {
     let client = Client::new();
     let response = client
-        .get(&model.url)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Download request failed: {}", e))?;
@@ -46,10 +61,9 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
         ));
     }
 
-    let total = response.content_length().unwrap_or(model.size_bytes);
+    let total = response.content_length().unwrap_or(expected_size);
     let mut downloaded: u64 = 0;
 
-    // Write to temp file first, rename on completion (atomic write)
     let temp_path = dest.with_extension("bin.tmp");
     let mut file = tokio::fs::File::create(&temp_path)
         .await
@@ -81,16 +95,94 @@ pub async fn download_model(model_id: &str, app_handle: &AppHandle) -> Result<Pa
     file.flush()
         .await
         .map_err(|e| format!("Failed to flush file: {}", e))?;
-
-    // Close the file handle before renaming to ensure all data is written
     drop(file);
 
-    // Atomic rename: temp -> final destination
-    tokio::fs::rename(&temp_path, &dest)
+    tokio::fs::rename(&temp_path, dest)
         .await
         .map_err(|e| format!("Failed to rename temp file: {}", e))?;
 
-    Ok(dest)
+    Ok(())
+}
+
+async fn download_multi_file(
+    model_id: &str,
+    model_dir: &PathBuf,
+    files: &[(String, String)],
+    total_size: u64,
+    app_handle: &AppHandle,
+) -> Result<(), String> {
+    // Create model directory
+    tokio::fs::create_dir_all(model_dir)
+        .await
+        .map_err(|e| format!("Failed to create model dir: {}", e))?;
+
+    let client = Client::new();
+    let mut total_downloaded: u64 = 0;
+
+    for (filename, url) in files {
+        let file_dest = model_dir.join(filename);
+
+        // Skip files already downloaded
+        if file_dest.exists() {
+            if let Ok(meta) = std::fs::metadata(&file_dest) {
+                total_downloaded += meta.len();
+            }
+            continue;
+        }
+
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Download request for {} failed: {}", filename, e))?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Download of {} failed with status: {}",
+                filename,
+                response.status()
+            ));
+        }
+
+        let temp_path = file_dest.with_extension("tmp");
+        let mut file = tokio::fs::File::create(&temp_path)
+            .await
+            .map_err(|e| format!("Failed to create temp file for {}: {}", filename, e))?;
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download stream error for {}: {}", filename, e))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Failed to write chunk for {}: {}", filename, e))?;
+
+            total_downloaded += chunk.len() as u64;
+
+            app_handle
+                .emit(
+                    "download-progress",
+                    serde_json::json!({
+                        "model_id": model_id,
+                        "percent": (total_downloaded as f64 / total_size as f64) * 100.0,
+                        "downloaded_bytes": total_downloaded,
+                        "total_bytes": total_size,
+                    }),
+                )
+                .ok();
+        }
+
+        file.flush()
+            .await
+            .map_err(|e| format!("Failed to flush file {}: {}", filename, e))?;
+        drop(file);
+
+        tokio::fs::rename(&temp_path, &file_dest)
+            .await
+            .map_err(|e| format!("Failed to rename temp file for {}: {}", filename, e))?;
+    }
+
+    Ok(())
 }
 
 pub fn delete_model(model_id: &str) -> Result<(), String> {
@@ -102,7 +194,13 @@ pub fn delete_model(model_id: &str) -> Result<(), String> {
 
     let path = Config::models_dir().join(&model.filename);
     if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| format!("Failed to delete model: {}", e))?;
+        if model.model_type == ModelType::MoonshineOnnx {
+            std::fs::remove_dir_all(&path)
+                .map_err(|e| format!("Failed to delete model directory: {}", e))?;
+        } else {
+            std::fs::remove_file(&path)
+                .map_err(|e| format!("Failed to delete model: {}", e))?;
+        }
     }
     Ok(())
 }
@@ -112,7 +210,19 @@ pub fn is_model_downloaded(model_id: &str) -> bool {
     registry
         .iter()
         .find(|m| m.id == model_id)
-        .map(|m| Config::models_dir().join(&m.filename).exists())
+        .map(|m| {
+            let base = Config::models_dir().join(&m.filename);
+            if m.files.is_empty() {
+                // Single-file: check file exists and is non-empty
+                base.exists() && std::fs::metadata(&base).map(|meta| meta.len() > 0).unwrap_or(false)
+            } else {
+                // Multi-file: check directory exists with all expected files
+                base.is_dir()
+                    && m.files
+                        .iter()
+                        .all(|(fname, _)| base.join(fname).exists())
+            }
+        })
         .unwrap_or(false)
 }
 
@@ -124,7 +234,6 @@ mod tests {
 
     #[test]
     fn test_is_model_downloaded_returns_false_for_nonexistent_model() {
-        // A model with a made-up ID should not be found in registry, thus false
         assert!(
             !is_model_downloaded("totally-fake-model-xyz"),
             "nonexistent model should not be considered downloaded"
@@ -133,12 +242,7 @@ mod tests {
 
     #[test]
     fn test_is_model_downloaded_returns_false_for_valid_model_not_on_disk() {
-        // "tiny" is a valid model ID but the file likely does not exist in a test env
-        // Unless the user has actually downloaded it, this should be false
-        // (This test is best-effort -- in CI it will always be false)
         let result = is_model_downloaded("tiny");
-        // We cannot strictly assert false because the file might exist on the developer's machine
-        // Instead, just verify it returns a bool without panicking
         let _ = result;
     }
 
@@ -155,10 +259,7 @@ mod tests {
 
     #[test]
     fn test_delete_model_valid_id_no_file_ok() {
-        // Even if the model file does not exist on disk, delete_model should succeed
-        // (it checks path.exists() and skips if not found)
         let result = delete_model("tiny");
-        // This should not error -- it checks if the file exists first
         assert!(
             result.is_ok(),
             "deleting a valid model ID with no file on disk should succeed"
@@ -167,7 +268,6 @@ mod tests {
 
     #[test]
     fn test_delete_model_with_file_removes_it() {
-        // Create a fake model file in the models directory
         let models_dir = Config::models_dir();
         std::fs::create_dir_all(&models_dir).ok();
 
@@ -175,14 +275,58 @@ mod tests {
         let tiny = registry.iter().find(|m| m.id == "tiny").unwrap();
         let path = models_dir.join(&tiny.filename);
 
-        // Create a dummy file
         std::fs::write(&path, b"fake model data").unwrap();
         assert!(path.exists());
 
-        // Delete it
         let result = delete_model("tiny");
         assert!(result.is_ok());
         assert!(!path.exists(), "model file should be deleted");
+    }
+
+    #[test]
+    fn test_delete_moonshine_model_removes_directory() {
+        let models_dir = Config::models_dir();
+        let model_dir = models_dir.join("moonshine-tiny");
+        std::fs::create_dir_all(&model_dir).ok();
+        std::fs::write(model_dir.join("encoder_model.onnx"), b"fake").unwrap();
+        std::fs::write(model_dir.join("decoder_model_merged.onnx"), b"fake").unwrap();
+        std::fs::write(model_dir.join("tokenizer.json"), b"fake").unwrap();
+        assert!(model_dir.exists());
+
+        let result = delete_model("moonshine-tiny");
+        assert!(result.is_ok());
+        assert!(!model_dir.exists(), "moonshine model directory should be deleted");
+    }
+
+    #[test]
+    fn test_is_moonshine_model_downloaded_checks_all_files() {
+        let models_dir = Config::models_dir();
+        let model_dir = models_dir.join("moonshine-tiny");
+
+        // Clean up from any previous test
+        let _ = std::fs::remove_dir_all(&model_dir);
+
+        // Not downloaded yet
+        assert!(!is_model_downloaded("moonshine-tiny"));
+
+        // Create directory with only some files
+        std::fs::create_dir_all(&model_dir).unwrap();
+        std::fs::write(model_dir.join("encoder_model.onnx"), b"fake").unwrap();
+        assert!(
+            !is_model_downloaded("moonshine-tiny"),
+            "incomplete download should not count as downloaded"
+        );
+
+        // Add remaining files
+        std::fs::write(model_dir.join("decoder_model_merged.onnx"), b"fake").unwrap();
+        std::fs::write(model_dir.join("tokenizer.json"), b"fake").unwrap();
+        assert!(
+            is_model_downloaded("moonshine-tiny"),
+            "complete download should count as downloaded"
+        );
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&model_dir);
     }
 
     // --- Path Construction Tests ---
