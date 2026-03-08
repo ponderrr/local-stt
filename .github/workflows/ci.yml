@@ -32,6 +32,12 @@ jobs:
             libpulse-dev \
             pkg-config
 
+      - name: Install ONNX Runtime
+        run: |
+          wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz
+          tar xzf onnxruntime-linux-x64-1.22.0.tgz
+          echo "ORT_DYLIB_PATH=${{ github.workspace }}/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so" >> $GITHUB_ENV
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
