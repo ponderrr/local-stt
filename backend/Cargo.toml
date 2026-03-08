@@ -1,6 +1,6 @@
 [package]
 name = "whispertype"
-version = "0.2.0"
+version = "0.3.0-alpha.1"
 description = "Local, private speech-to-text powered by Whisper"
 authors = ["ponderrr <robert.ponder@selu.edu>"]
 license = "MIT"
@@ -22,6 +22,10 @@ path = "src/bin/list_audio.rs"
 [[bin]]
 name = "audio_diag"
 path = "src/bin/audio_diag.rs"
+
+[[bin]]
+name = "moonshine_bench"
+path = "src/bin/moonshine_bench.rs"
 
 [features]
 default = ["cuda"]
@@ -50,6 +54,7 @@ libpulse-binding = "2.28"
 libpulse-simple-binding = "2.28"
 silero-vad-rust = { git = "https://github.com/sheldonix/silero-vad-rust.git" }
 ort = { version = "=2.0.0-rc.10", features = ["download-binaries", "load-dynamic", "ndarray"] }
+transcribe-rs = { version = "0.2.9", default-features = false, features = ["moonshine"] }
 
 [dev-dependencies]
 tempfile = "3"
