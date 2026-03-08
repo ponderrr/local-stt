@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::audio::{AudioMessage, AudioPipeline};
 use crate::config::Config;
 use crate::output;
+use crate::transcription::agreement::LocalAgreement;
 use crate::transcription::engine::TranscriptionEngine;
 
 pub struct AppState {
@@ -117,8 +118,10 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
             };
 
             let mut audio_buf: Vec<f32> = Vec::new();
+            let mut agreement = LocalAgreement::new();
             let min_samples: usize = 16000; // 1.0s minimum to avoid hallucination
             let max_samples: usize = 16000 * 30; // 30s maximum buffer
+            let mut has_output = false; // tracks whether we've typed anything this utterance
 
             while let Ok(msg) = receiver.recv() {
                 let mut got_end = false;
@@ -146,6 +149,8 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                 if audio_buf.len() < min_samples {
                     if got_end {
                         audio_buf.clear();
+                        agreement.reset();
+                        has_output = false;
                     }
                     continue;
                 }
@@ -161,10 +166,54 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
 
                         let text = text.trim().to_string();
 
+                        // Run through agreement algorithm
+                        let result = agreement.process(&text);
+
+                        // Output newly confirmed words to keyboard/clipboard
+                        if !result.newly_confirmed.is_empty() {
+                            let output = if has_output {
+                                format!(" {}", result.newly_confirmed)
+                            } else {
+                                result.newly_confirmed.clone()
+                            };
+                            if let Err(e) = output::output_text(&output, &output_mode) {
+                                app_clone
+                                    .emit("output-error", format!("Failed to output text: {}", e))
+                                    .ok();
+                            }
+                            has_output = true;
+                            app_clone
+                                .emit(
+                                    "transcription-update",
+                                    serde_json::json!({
+                                        "text": result.newly_confirmed,
+                                        "is_partial": false,
+                                    }),
+                                )
+                                .ok();
+                        }
+
+                        // Update tentative display
+                        app_clone
+                            .emit(
+                                "transcription-update",
+                                serde_json::json!({
+                                    "text": result.tentative,
+                                    "is_partial": true,
+                                }),
+                            )
+                            .ok();
+
                         if got_end {
-                            // Final result: output to keyboard/clipboard + emit permanent
-                            if !text.is_empty() {
-                                if let Err(e) = output::output_text(&text, &output_mode) {
+                            // Finalize: confirm remaining tentative words
+                            let remaining = agreement.finalize();
+                            if !remaining.is_empty() {
+                                let output = if has_output {
+                                    format!(" {}", remaining)
+                                } else {
+                                    remaining.clone()
+                                };
+                                if let Err(e) = output::output_text(&output, &output_mode) {
                                     app_clone
                                         .emit(
                                             "output-error",
@@ -172,28 +221,25 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                                         )
                                         .ok();
                                 }
+                                app_clone
+                                    .emit(
+                                        "transcription-update",
+                                        serde_json::json!({
+                                            "text": remaining,
+                                            "is_partial": false,
+                                        }),
+                                    )
+                                    .ok();
                             }
+                            // Clear tentative display
                             app_clone
                                 .emit(
                                     "transcription-update",
-                                    serde_json::json!({
-                                        "text": text,
-                                        "is_partial": false,
-                                    }),
+                                    serde_json::json!({ "text": "", "is_partial": true }),
                                 )
                                 .ok();
                             audio_buf.clear();
-                        } else {
-                            // Partial result: emit live preview only (no keyboard output)
-                            app_clone
-                                .emit(
-                                    "transcription-update",
-                                    serde_json::json!({
-                                        "text": text,
-                                        "is_partial": true,
-                                    }),
-                                )
-                                .ok();
+                            has_output = false;
                         }
                     }
                     Err(e) => {
