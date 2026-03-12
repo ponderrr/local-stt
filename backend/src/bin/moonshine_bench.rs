@@ -8,9 +8,7 @@
 
 use std::path::PathBuf;
 use std::time::Instant;
-use transcribe_rs::engines::moonshine::{
-    MoonshineEngine, MoonshineModelParams, ModelVariant,
-};
+use transcribe_rs::engines::moonshine::{ModelVariant, MoonshineEngine, MoonshineModelParams};
 use transcribe_rs::TranscriptionEngine;
 
 fn main() {

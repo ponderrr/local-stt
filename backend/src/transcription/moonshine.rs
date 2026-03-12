@@ -3,12 +3,18 @@
 
 use std::path::Path;
 use transcribe_rs::engines::moonshine::{
-    MoonshineEngine as TrMoonshineEngine, MoonshineModelParams, ModelVariant,
+    ModelVariant, MoonshineEngine as TrMoonshineEngine, MoonshineModelParams,
 };
 use transcribe_rs::TranscriptionEngine as TrEngine;
 
 pub struct MoonshineEngine {
     engine: TrMoonshineEngine,
+}
+
+impl Default for MoonshineEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MoonshineEngine {
@@ -18,9 +24,25 @@ impl MoonshineEngine {
         }
     }
 
+    /// Load from a model directory, auto-detecting variant from directory name.
+    pub fn load(model_dir: &Path) -> Result<Self, String> {
+        let dir_name = model_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("moonshine-tiny");
+
+        let variant = if dir_name.contains("base") {
+            ModelVariant::Base
+        } else {
+            ModelVariant::Tiny
+        };
+
+        Self::load_with_variant(model_dir, variant)
+    }
+
     /// Load a Moonshine model from a directory containing encoder_model.onnx,
     /// decoder_model_merged.onnx, and tokenizer.json.
-    pub fn load(model_dir: &Path, variant: ModelVariant) -> Result<Self, String> {
+    pub fn load_with_variant(model_dir: &Path, variant: ModelVariant) -> Result<Self, String> {
         let mut engine = TrMoonshineEngine::new();
         engine
             .load_model_with_params(model_dir, MoonshineModelParams::variant(variant))
@@ -89,7 +111,7 @@ mod tests {
     fn test_moonshine_load_model() {
         use crate::config::Config;
         let model_dir = Config::models_dir().join("moonshine-tiny");
-        let result = MoonshineEngine::load(&model_dir, ModelVariant::Tiny);
+        let result = MoonshineEngine::load_with_variant(&model_dir, ModelVariant::Tiny);
         assert!(result.is_ok(), "should load moonshine-tiny model");
     }
 
@@ -98,7 +120,8 @@ mod tests {
     fn test_moonshine_transcribe_silence() {
         use crate::config::Config;
         let model_dir = Config::models_dir().join("moonshine-tiny");
-        let mut engine = MoonshineEngine::load(&model_dir, ModelVariant::Tiny).unwrap();
+        let mut engine =
+            MoonshineEngine::load_with_variant(&model_dir, ModelVariant::Tiny).unwrap();
         // 1 second of silence at 16kHz
         let silence = vec![0.0f32; 16000];
         let result = engine.transcribe(&silence);
@@ -110,7 +133,8 @@ mod tests {
     fn test_moonshine_transcribe_sine_wave() {
         use crate::config::Config;
         let model_dir = Config::models_dir().join("moonshine-tiny");
-        let mut engine = MoonshineEngine::load(&model_dir, ModelVariant::Tiny).unwrap();
+        let mut engine =
+            MoonshineEngine::load_with_variant(&model_dir, ModelVariant::Tiny).unwrap();
         // 2 seconds of 440Hz sine wave at 16kHz
         let samples: Vec<f32> = (0..32000)
             .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 16000.0).sin() * 0.5)

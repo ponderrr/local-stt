@@ -14,6 +14,14 @@ pub enum OutputMode {
     Both,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamEngineConfig {
+    #[default]
+    WhisperOnly,
+    Moonshine,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub version: u32,
@@ -29,6 +37,8 @@ pub struct Config {
     pub overlap_ms: u32,
     pub downloaded_models: Vec<String>,
     pub first_run_complete: bool,
+    #[serde(default)]
+    pub stream_engine: StreamEngineConfig,
 }
 
 impl Default for Config {
@@ -46,6 +56,7 @@ impl Default for Config {
             overlap_ms: 500,
             downloaded_models: Vec::new(),
             first_run_complete: false,
+            stream_engine: StreamEngineConfig::default(),
         }
     }
 }
@@ -169,6 +180,7 @@ mod tests {
             overlap_ms: 1000,
             downloaded_models: vec!["tiny".to_string(), "base".to_string()],
             first_run_complete: true,
+            stream_engine: StreamEngineConfig::WhisperOnly,
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -340,6 +352,7 @@ mod tests {
             overlap_ms: 750,
             downloaded_models: vec!["tiny".to_string()],
             first_run_complete: true,
+            stream_engine: StreamEngineConfig::WhisperOnly,
         };
 
         // Save to temp path
@@ -419,5 +432,34 @@ mod tests {
             crate::audio::vad::VadBackend::Silero,
             "missing vad_backend should default to Silero"
         );
+    }
+
+    #[test]
+    fn test_stream_engine_config_serialization() {
+        let whisper = serde_json::to_string(&StreamEngineConfig::WhisperOnly).unwrap();
+        assert_eq!(whisper, "\"whisper_only\"");
+        let moonshine = serde_json::to_string(&StreamEngineConfig::Moonshine).unwrap();
+        assert_eq!(moonshine, "\"moonshine\"");
+    }
+
+    #[test]
+    fn test_stream_engine_config_deserialization() {
+        let whisper: StreamEngineConfig = serde_json::from_str("\"whisper_only\"").unwrap();
+        assert_eq!(whisper, StreamEngineConfig::WhisperOnly);
+        let moonshine: StreamEngineConfig = serde_json::from_str("\"moonshine\"").unwrap();
+        assert_eq!(moonshine, StreamEngineConfig::Moonshine);
+    }
+
+    #[test]
+    fn test_stream_engine_config_backward_compat() {
+        // Existing configs without stream_engine should default to whisper_only
+        let json = r#"{
+            "version": 1, "hotkey": "Ctrl+Shift+Space", "default_model": "distil-large-v3",
+            "output_mode": "both", "audio_device": null, "language": "auto",
+            "vad_threshold": 0.012, "chunk_duration_ms": 2000, "overlap_ms": 500,
+            "downloaded_models": [], "first_run_complete": false
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.stream_engine, StreamEngineConfig::WhisperOnly);
     }
 }

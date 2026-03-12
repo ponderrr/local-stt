@@ -3,7 +3,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::commands::dictation::AppState;
 use crate::config::Config;
 use crate::model_manager;
-use crate::transcription::{get_model_registry, WhisperModel};
+use crate::transcription::{get_model_registry, ModelType, WhisperModel};
 
 #[derive(serde::Serialize)]
 pub struct ModelInfo {
@@ -74,6 +74,14 @@ pub async fn load_model(
         .iter()
         .find(|m| m.id == model_id)
         .ok_or_else(|| format!("Unknown model: {}", model_id))?;
+
+    // Moonshine ONNX models are loaded on-demand by the dictation thread via
+    // transcribe-rs, not through the Whisper engine.  Only Whisper GGML models
+    // should be loaded here.
+    if model.model_type == ModelType::MoonshineOnnx {
+        app.emit("dictation-status", "idle").ok();
+        return Ok(());
+    }
 
     let model_path = Config::models_dir().join(&model.filename);
     if !model_path.exists() {

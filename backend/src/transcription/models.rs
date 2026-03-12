@@ -4,17 +4,12 @@
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelType {
+    #[default]
     WhisperGgml,
     MoonshineOnnx,
-}
-
-impl Default for ModelType {
-    fn default() -> Self {
-        ModelType::WhisperGgml
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +30,8 @@ pub struct WhisperModel {
     pub files: Vec<(String, String)>,
 }
 
-const HF_MOONSHINE: &str = "https://huggingface.co/UsefulSensors/moonshine/resolve/main/onnx/merged";
+const HF_MOONSHINE: &str =
+    "https://huggingface.co/UsefulSensors/moonshine/resolve/main/onnx/merged";
 
 static MODEL_REGISTRY: LazyLock<Vec<WhisperModel>> = LazyLock::new(|| {
     vec![
@@ -278,7 +274,10 @@ mod tests {
     #[test]
     fn test_registry_whisper_filenames_end_with_bin() {
         let registry = get_model_registry();
-        for model in registry.iter().filter(|m| m.model_type == ModelType::WhisperGgml) {
+        for model in registry
+            .iter()
+            .filter(|m| m.model_type == ModelType::WhisperGgml)
+        {
             assert!(
                 model.filename.ends_with(".bin"),
                 "Whisper model {} filename should end with .bin",
@@ -384,13 +383,19 @@ mod tests {
         assert_eq!(tiny.vram_mb, 0, "Moonshine is CPU-only");
         assert_eq!(tiny.files.len(), 3, "moonshine-tiny needs 3 files");
         assert!(tiny.files.iter().any(|(f, _)| f == "encoder_model.onnx"));
-        assert!(tiny.files.iter().any(|(f, _)| f == "decoder_model_merged.onnx"));
+        assert!(tiny
+            .files
+            .iter()
+            .any(|(f, _)| f == "decoder_model_merged.onnx"));
         assert!(tiny.files.iter().any(|(f, _)| f == "tokenizer.json"));
 
         let base = registry.iter().find(|m| m.id == "moonshine-base").unwrap();
         assert_eq!(base.model_type, ModelType::MoonshineOnnx);
         assert_eq!(base.files.len(), 3, "moonshine-base needs 3 files");
-        assert!(base.size_bytes > tiny.size_bytes, "base should be larger than tiny");
+        assert!(
+            base.size_bytes > tiny.size_bytes,
+            "base should be larger than tiny"
+        );
     }
 
     #[test]

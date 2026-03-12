@@ -152,7 +152,8 @@ async fn download_multi_file(
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| format!("Download stream error for {}: {}", filename, e))?;
+            let chunk =
+                chunk.map_err(|e| format!("Download stream error for {}: {}", filename, e))?;
             file.write_all(&chunk)
                 .await
                 .map_err(|e| format!("Failed to write chunk for {}: {}", filename, e))?;
@@ -198,8 +199,7 @@ pub fn delete_model(model_id: &str) -> Result<(), String> {
             std::fs::remove_dir_all(&path)
                 .map_err(|e| format!("Failed to delete model directory: {}", e))?;
         } else {
-            std::fs::remove_file(&path)
-                .map_err(|e| format!("Failed to delete model: {}", e))?;
+            std::fs::remove_file(&path).map_err(|e| format!("Failed to delete model: {}", e))?;
         }
     }
     Ok(())
@@ -214,13 +214,13 @@ pub fn is_model_downloaded(model_id: &str) -> bool {
             let base = Config::models_dir().join(&m.filename);
             if m.files.is_empty() {
                 // Single-file: check file exists and is non-empty
-                base.exists() && std::fs::metadata(&base).map(|meta| meta.len() > 0).unwrap_or(false)
+                base.exists()
+                    && std::fs::metadata(&base)
+                        .map(|meta| meta.len() > 0)
+                        .unwrap_or(false)
             } else {
                 // Multi-file: check directory exists with all expected files
-                base.is_dir()
-                    && m.files
-                        .iter()
-                        .all(|(fname, _)| base.join(fname).exists())
+                base.is_dir() && m.files.iter().all(|(fname, _)| base.join(fname).exists())
             }
         })
         .unwrap_or(false)
@@ -229,6 +229,10 @@ pub fn is_model_downloaded(model_id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Guards tests that create/delete files in the shared moonshine-tiny directory.
+    static MOONSHINE_FS_LOCK: Mutex<()> = Mutex::new(());
 
     // --- is_model_downloaded Tests ---
 
@@ -285,6 +289,8 @@ mod tests {
 
     #[test]
     fn test_delete_moonshine_model_removes_directory() {
+        let _lock = MOONSHINE_FS_LOCK.lock().unwrap();
+
         let models_dir = Config::models_dir();
         let model_dir = models_dir.join("moonshine-tiny");
         std::fs::create_dir_all(&model_dir).ok();
@@ -295,11 +301,16 @@ mod tests {
 
         let result = delete_model("moonshine-tiny");
         assert!(result.is_ok());
-        assert!(!model_dir.exists(), "moonshine model directory should be deleted");
+        assert!(
+            !model_dir.exists(),
+            "moonshine model directory should be deleted"
+        );
     }
 
     #[test]
     fn test_is_moonshine_model_downloaded_checks_all_files() {
+        let _lock = MOONSHINE_FS_LOCK.lock().unwrap();
+
         let models_dir = Config::models_dir();
         let model_dir = models_dir.join("moonshine-tiny");
 

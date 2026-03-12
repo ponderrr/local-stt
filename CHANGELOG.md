@@ -2,6 +2,29 @@
 
 All notable changes to WhisperType will be documented in this file.
 
+## [0.3.0] - 2026-03-11
+
+### Added
+- **Moonshine ONNX engine** — CPU-only speech-to-text via transcribe-rs. Runs the Moonshine model family (Tiny ~28 MB, Base ~63 MB) through ONNX Runtime for instant streaming previews without GPU.
+- **Dual-path transcription pipeline** — Moonshine provides real-time streaming previews during speech while Whisper produces the final high-accuracy transcription on EndOfSpeech. Configurable via Settings.
+- **Stream Engine selector** — New setting to choose between Whisper-only mode (v0.2.0 behavior) and Moonshine + Whisper dual-path mode.
+- **ModelType enum** — Distinguishes Whisper GGML models from Moonshine ONNX models in the registry. Prevents ONNX directories from being loaded through whisper.cpp.
+- **Multi-file model downloads** — Model download manager supports Moonshine models that consist of multiple files (encoder, decoder, tokenizer).
+- **Moonshine benchmark binary** — `moonshine_bench` binary for profiling Moonshine inference performance.
+
+### Fixed
+- **ORT session race condition** — Concurrent ONNX Runtime session creation between Silero VAD and Moonshine caused `GetElementType is not implemented` errors. Moonshine is now loaded sequentially before the audio pipeline starts.
+- **ORT environment initialization** — Added eager `ort::init().commit()` at app startup to prevent environment initialization races between independent ORT consumers.
+- **Moonshine model loading through Whisper engine** — Loading a Moonshine model ID previously passed the ONNX directory path to whisper.cpp, causing `invalid model data (bad magic)` errors. Moonshine models now skip the Whisper load path entirely.
+
+### Changed
+- Transcription thread receives a pre-loaded Moonshine engine instance instead of loading it inline, ensuring all ORT sessions are created on the same thread sequentially.
+- Model registry expanded from 7 to 9 entries (7 Whisper GGML + 2 Moonshine ONNX).
+
+### Dependencies
+- Added `transcribe-rs` 0.2.9 with `moonshine` feature for Moonshine ONNX inference.
+- `ort` 2.0.0-rc.10 shared between Silero VAD and transcribe-rs (zero conflicts via `load-dynamic`).
+
 ## [0.2.0] - 2026-03-07
 
 ### Added
