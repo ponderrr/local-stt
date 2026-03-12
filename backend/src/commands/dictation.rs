@@ -7,10 +7,11 @@ use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::audio::{AudioMessage, AudioPipeline};
-use crate::config::Config;
+use crate::config::{Config, StreamEngineConfig};
 use crate::output;
 use crate::transcription::agreement::LocalAgreement;
 use crate::transcription::engine::TranscriptionEngine;
+use crate::transcription::moonshine::MoonshineEngine;
 
 pub struct AppState {
     pub engine: Arc<TranscriptionEngine>,
@@ -84,8 +85,33 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
 
         let language = config.language.clone();
         let output_mode = config.output_mode.clone();
+        let stream_engine_config = config.stream_engine.clone();
         drop(config);
         drop(handle_lock);
+
+        // Load Moonshine BEFORE starting the audio pipeline so that all ORT
+        // sessions (Moonshine + Silero VAD) are created sequentially rather
+        // than concurrently.  Concurrent session creation against the same
+        // load-dynamic ORT environment causes "GetElementType is not
+        // implemented" crashes in Silero VAD inference.
+        let moonshine = if stream_engine_config == StreamEngineConfig::Moonshine {
+            let moonshine_model_dir = Config::models_dir().join("moonshine-tiny");
+            match MoonshineEngine::load(&moonshine_model_dir) {
+                Ok(engine) => {
+                    eprintln!("moonshine: engine loaded for streaming display");
+                    Some(engine)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "moonshine: failed to load ({}), falling back to whisper-only",
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         app.emit("dictation-status", "listening").ok();
 
@@ -116,6 +142,8 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     return;
                 }
             };
+
+            let mut moonshine = moonshine;
 
             let mut audio_buf: Vec<f32> = Vec::new();
             let mut agreement = LocalAgreement::new();
@@ -155,21 +183,176 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                     continue;
                 }
 
-                // Run inference on the full accumulated buffer
-                match engine.transcribe(&mut whisper_state, &audio_buf, &language) {
-                    Ok(segments) => {
-                        let text: String = segments
-                            .iter()
-                            .map(|s| s.text.as_str())
-                            .collect::<Vec<_>>()
-                            .join(" ");
+                // === Dual-path inference ===
+                if got_end {
+                    // --- EndOfSpeech: quality pass ---
+                    // One last Moonshine stream pass through agreement (dual-path only)
+                    if let Some(ref mut ms) = moonshine {
+                        if let Ok(ms_text) = ms.transcribe(&audio_buf) {
+                            if !ms_text.is_empty() {
+                                let result = agreement.process(&ms_text);
+                                if !result.newly_confirmed.is_empty() {
+                                    let output = if has_output {
+                                        format!(" {}", result.newly_confirmed)
+                                    } else {
+                                        result.newly_confirmed.clone()
+                                    };
+                                    if let Err(e) = output::output_text(&output, &output_mode) {
+                                        app_clone
+                                            .emit("output-error", format!("Output error: {}", e))
+                                            .ok();
+                                    }
+                                    has_output = true;
+                                    app_clone
+                                        .emit(
+                                            "transcription-update",
+                                            serde_json::json!({
+                                                "text": result.newly_confirmed,
+                                                "is_partial": false,
+                                            }),
+                                        )
+                                        .ok();
+                                }
+                            }
+                        }
+                    }
 
-                        let text = text.trim().to_string();
+                    // Whisper quality pass on full utterance
+                    match engine.transcribe(&mut whisper_state, &audio_buf, &language) {
+                        Ok(segments) => {
+                            let text: String = segments
+                                .iter()
+                                .map(|s| s.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            let text = text.trim().to_string();
 
-                        // Run through agreement algorithm
+                            // In whisper-only mode, process through agreement (v0.2.0 behavior)
+                            if moonshine.is_none() && !text.is_empty() {
+                                let result = agreement.process(&text);
+                                if !result.newly_confirmed.is_empty() {
+                                    let output = if has_output {
+                                        format!(" {}", result.newly_confirmed)
+                                    } else {
+                                        result.newly_confirmed.clone()
+                                    };
+                                    if let Err(e) = output::output_text(&output, &output_mode) {
+                                        app_clone
+                                            .emit("output-error", format!("Output error: {}", e))
+                                            .ok();
+                                    }
+                                    has_output = true;
+                                    app_clone
+                                        .emit(
+                                            "transcription-update",
+                                            serde_json::json!({
+                                                "text": result.newly_confirmed,
+                                                "is_partial": false,
+                                            }),
+                                        )
+                                        .ok();
+                                }
+                                // Update tentative display (v0.2.0 behavior)
+                                app_clone
+                                    .emit(
+                                        "transcription-update",
+                                        serde_json::json!({
+                                            "text": result.tentative,
+                                            "is_partial": true,
+                                        }),
+                                    )
+                                    .ok();
+                            }
+
+                            // Finalize: confirm remaining tentative words
+                            let remaining = agreement.finalize();
+                            if !remaining.is_empty() {
+                                let output = if has_output {
+                                    format!(" {}", remaining)
+                                } else {
+                                    remaining.clone()
+                                };
+                                if let Err(e) = output::output_text(&output, &output_mode) {
+                                    app_clone
+                                        .emit("output-error", format!("Output error: {}", e))
+                                        .ok();
+                                }
+                                app_clone
+                                    .emit(
+                                        "transcription-update",
+                                        serde_json::json!({
+                                            "text": remaining,
+                                            "is_partial": false,
+                                        }),
+                                    )
+                                    .ok();
+                            }
+                        }
+                        Err(e) => {
+                            // Still finalize agreement even if Whisper fails
+                            let remaining = agreement.finalize();
+                            if !remaining.is_empty() {
+                                let output = if has_output {
+                                    format!(" {}", remaining)
+                                } else {
+                                    remaining.clone()
+                                };
+                                let _ = output::output_text(&output, &output_mode);
+                                app_clone
+                                    .emit(
+                                        "transcription-update",
+                                        serde_json::json!({
+                                            "text": remaining,
+                                            "is_partial": false,
+                                        }),
+                                    )
+                                    .ok();
+                            }
+                            app_clone
+                                .emit(
+                                    "transcription-error",
+                                    format!("Whisper quality pass failed: {}", e),
+                                )
+                                .ok();
+                        }
+                    }
+
+                    // Clear tentative display and reset for next utterance
+                    app_clone
+                        .emit(
+                            "transcription-update",
+                            serde_json::json!({ "text": "", "is_partial": true }),
+                        )
+                        .ok();
+                    audio_buf.clear();
+                    has_output = false;
+                } else {
+                    // --- During speech: stream pass ---
+                    let text = if let Some(ref mut ms) = moonshine {
+                        ms.transcribe(&audio_buf).unwrap_or_default()
+                    } else {
+                        match engine.transcribe(&mut whisper_state, &audio_buf, &language) {
+                            Ok(segments) => segments
+                                .iter()
+                                .map(|s| s.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                                .trim()
+                                .to_string(),
+                            Err(e) => {
+                                app_clone
+                                    .emit(
+                                        "transcription-error",
+                                        format!("Transcription failed: {}", e),
+                                    )
+                                    .ok();
+                                String::new()
+                            }
+                        }
+                    };
+
+                    if !text.is_empty() {
                         let result = agreement.process(&text);
-
-                        // Output newly confirmed words to keyboard/clipboard
                         if !result.newly_confirmed.is_empty() {
                             let output = if has_output {
                                 format!(" {}", result.newly_confirmed)
@@ -178,7 +361,7 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                             };
                             if let Err(e) = output::output_text(&output, &output_mode) {
                                 app_clone
-                                    .emit("output-error", format!("Failed to output text: {}", e))
+                                    .emit("output-error", format!("Output error: {}", e))
                                     .ok();
                             }
                             has_output = true;
@@ -192,8 +375,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                                 )
                                 .ok();
                         }
-
-                        // Update tentative display
                         app_clone
                             .emit(
                                 "transcription-update",
@@ -201,52 +382,6 @@ pub fn toggle_dictation_inner(state: &AppState, app: &AppHandle) -> Result<bool,
                                     "text": result.tentative,
                                     "is_partial": true,
                                 }),
-                            )
-                            .ok();
-
-                        if got_end {
-                            // Finalize: confirm remaining tentative words
-                            let remaining = agreement.finalize();
-                            if !remaining.is_empty() {
-                                let output = if has_output {
-                                    format!(" {}", remaining)
-                                } else {
-                                    remaining.clone()
-                                };
-                                if let Err(e) = output::output_text(&output, &output_mode) {
-                                    app_clone
-                                        .emit(
-                                            "output-error",
-                                            format!("Failed to output text: {}", e),
-                                        )
-                                        .ok();
-                                }
-                                app_clone
-                                    .emit(
-                                        "transcription-update",
-                                        serde_json::json!({
-                                            "text": remaining,
-                                            "is_partial": false,
-                                        }),
-                                    )
-                                    .ok();
-                            }
-                            // Clear tentative display
-                            app_clone
-                                .emit(
-                                    "transcription-update",
-                                    serde_json::json!({ "text": "", "is_partial": true }),
-                                )
-                                .ok();
-                            audio_buf.clear();
-                            has_output = false;
-                        }
-                    }
-                    Err(e) => {
-                        app_clone
-                            .emit(
-                                "transcription-error",
-                                format!("Transcription failed: {}", e),
                             )
                             .ok();
                     }
@@ -339,6 +474,15 @@ mod tests {
         assert!(
             handle_lock.is_none(),
             "Audio handle must remain empty after join on empty state"
+        );
+    }
+
+    #[test]
+    fn test_stream_engine_config_default_is_whisper_only() {
+        let config = Config::default();
+        assert_eq!(
+            config.stream_engine,
+            crate::config::StreamEngineConfig::WhisperOnly
         );
     }
 }

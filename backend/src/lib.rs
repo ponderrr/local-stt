@@ -15,6 +15,13 @@ use transcription::engine::TranscriptionEngine;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize ONNX Runtime environment once before any sessions are created.
+    // Both Silero VAD and Moonshine (transcribe-rs) use ort with load-dynamic;
+    // eager init prevents races between concurrent session creation in different threads.
+    if let Err(e) = ort::init().commit() {
+        eprintln!("ort: failed to initialize environment: {}", e);
+    }
+
     let config = Config::load().unwrap_or_default();
 
     let app_state = AppState {

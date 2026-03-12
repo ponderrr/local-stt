@@ -1,2 +1,2 @@
 pub mod settings;
-pub use settings::{Config, OutputMode};
+pub use settings::{Config, OutputMode, StreamEngineConfig};

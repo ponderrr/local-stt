@@ -151,6 +151,34 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </p>
         </div>
 
+        {/* Stream Engine */}
+        <div>
+          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground block mb-2">
+            Stream Engine
+          </label>
+          <select
+            value={localConfig.stream_engine}
+            onChange={(e) =>
+              setLocalConfig({
+                ...localConfig,
+                stream_engine: e.target.value as Config['stream_engine'],
+              })
+            }
+            className="w-full bg-[#18181b] border border-white/[0.08] rounded-md px-3 py-2 text-sm text-foreground outline-none"
+          >
+            <option value="whisper_only" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Whisper Only
+            </option>
+            <option value="moonshine" style={{ backgroundColor: '#18181b', color: '#fafafa' }}>
+              Moonshine + Whisper (dual-path)
+            </option>
+          </select>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Moonshine provides instant streaming previews while Whisper produces the final
+            transcription.
+          </p>
+        </div>
+
         {/* Hotkey Display */}
         <div>
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground block mb-2">

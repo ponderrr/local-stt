@@ -123,6 +123,7 @@ describe('commands', () => {
       overlap_ms: 500,
       downloaded_models: ['tiny'],
       first_run_complete: true,
+      stream_engine: 'whisper_only' as const,
     };
     mockedInvoke.mockResolvedValue(undefined);
     await commands.updateConfig(config);

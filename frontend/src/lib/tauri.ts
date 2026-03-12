@@ -17,6 +17,7 @@ export interface Config {
   overlap_ms: number;
   downloaded_models: string[];
   first_run_complete: boolean;
+  stream_engine: 'whisper_only' | 'moonshine';
 }
 
 export interface ModelInfo {
